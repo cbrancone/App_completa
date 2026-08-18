@@ -150,9 +150,6 @@ elif menu == "🏃 Atleti":
 # ------------------------------------------
 # 3. CERTIFICATI MEDICI
 # ------------------------------------------
-# ------------------------------------------
-# 3. CERTIFICATI MEDICI
-# ------------------------------------------
 elif menu == "📋 Certificati Medici":
     st.header("📋 Gestione Visite e Certificati Medici")
     tab1, tab2, tab3 = st.tabs(["⚠️ Certificati in Scadenza", "➕ Inserisci / Rinnova Certificato", "📚 Storico Certificati"])
@@ -197,7 +194,7 @@ elif menu == "📋 Certificati Medici":
         else:
             st.success("Nessun certificato in scadenza nel periodo selezionato!")
 
-    with tab2:
+   with tab2:
         atleti_list = session.query(Atleta).all()
         if not atleti_list:
             st.warning("Devi prima inserire almeno un atleta per poter registrare un certificato medico.")
@@ -209,8 +206,8 @@ elif menu == "📋 Certificati Medici":
                 col_c1, col_c2 = st.columns(2)
                 data_visita = col_c1.date_input("Data Effettuazione Visita", value=datetime.date.today())
                 
-                # Calcola automaticamente la scadenza ad 1 anno dopo la visita
-                sc scadenza_predefinita = data_visita + datetime.timedelta(days=365)
+                # Calcola automaticamente la scadenza ad 1 anno dopo la visita (CORRETTO)
+                scadenza_predefinita = data_visita + datetime.timedelta(days=365)
                 data_scadenza = col_c2.date_input("Data Scadenza Certificato", value=scadenza_predefinita)
                 
                 tipo_visita = col_c1.selectbox("Tipo Visita", ["Agonistica", "Non Agonistica", "Elettrocardiogramma"])
