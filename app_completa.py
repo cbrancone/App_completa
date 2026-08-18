@@ -164,15 +164,11 @@ elif menu == "📋 Certificati Medici":
         
         if query:
             st.warning(f"Trovati {len(query)} certificati scaduti o in scadenza!")
-            
-            # Preparazione dei dati con i "semafori"
             data_tabella = []
             oggi = datetime.date.today()
             
             for a, v in query:
                 giorni_rimanenti = (v.data_scadenza - oggi).days
-                
-                # Logica del semaforo
                 if giorni_rimanenti < 0:
                     stato_semaforo = "🔴 Scaduto"
                 elif giorni_rimanenti <= 30:
@@ -194,7 +190,7 @@ elif menu == "📋 Certificati Medici":
         else:
             st.success("Nessun certificato in scadenza nel periodo selezionato!")
 
-   with tab2:
+    with tab2:
         atleti_list = session.query(Atleta).all()
         if not atleti_list:
             st.warning("Devi prima inserire almeno un atleta per poter registrare un certificato medico.")
@@ -206,7 +202,6 @@ elif menu == "📋 Certificati Medici":
                 col_c1, col_c2 = st.columns(2)
                 data_visita = col_c1.date_input("Data Effettuazione Visita", value=datetime.date.today())
                 
-                # Calcola automaticamente la scadenza ad 1 anno dopo la visita (CORRETTO)
                 scadenza_predefinita = data_visita + datetime.timedelta(days=365)
                 data_scadenza = col_c2.date_input("Data Scadenza Certificato", value=scadenza_predefinita)
                 
