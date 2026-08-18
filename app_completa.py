@@ -150,6 +150,9 @@ elif menu == "🏃 Atleti":
 # ------------------------------------------
 # 3. CERTIFICATI MEDICI
 # ------------------------------------------
+# ------------------------------------------
+# 3. CERTIFICATI MEDICI
+# ------------------------------------------
 elif menu == "📋 Certificati Medici":
     st.header("📋 Gestione Visite e Certificati Medici")
     tab1, tab2, tab3 = st.tabs(["⚠️ Certificati in Scadenza", "➕ Inserisci / Rinnova Certificato", "📚 Storico Certificati"])
@@ -164,16 +167,33 @@ elif menu == "📋 Certificati Medici":
         
         if query:
             st.warning(f"Trovati {len(query)} certificati scaduti o in scadenza!")
-            st.dataframe(pd.DataFrame([
-                {
+            
+            # Preparazione dei dati con i "semafori"
+            data_tabella = []
+            oggi = datetime.date.today()
+            
+            for a, v in query:
+                giorni_rimanenti = (v.data_scadenza - oggi).days
+                
+                # Logica del semaforo
+                if giorni_rimanenti < 0:
+                    stato_semaforo = "🔴 Scaduto"
+                elif giorni_rimanenti <= 30:
+                    stato_semaforo = "🟡 In scadenza"
+                else:
+                    stato_semaforo = "🟢 Valido"
+                
+                data_tabella.append({
+                    "Stato": stato_semaforo,
                     "Atleta": f"{a.nome} {a.cognome}",
                     "Tipo Visita": v.tipo_visita,
                     "Data Scadenza": v.data_scadenza,
-                    "Stato": "EXPIRED / SCADUTO" if v.data_scadenza < datetime.date.today() else "In Scadenza",
+                    "Giorni Rimanenti": f"{giorni_rimanenti} giorni" if giorni_rimanenti >= 0 else f"Scaduto da {-giorni_rimanenti} giorni",
                     "Telefono": a.telefono,
                     "Email": a.email
-                } for a, v in query
-            ]), use_container_width=True)
+                })
+                
+            st.dataframe(pd.DataFrame(data_tabella), use_container_width=True)
         else:
             st.success("Nessun certificato in scadenza nel periodo selezionato!")
 
@@ -190,7 +210,7 @@ elif menu == "📋 Certificati Medici":
                 data_visita = col_c1.date_input("Data Effettuazione Visita", value=datetime.date.today())
                 
                 # Calcola automaticamente la scadenza ad 1 anno dopo la visita
-                scadenza_predefinita = data_visita + datetime.timedelta(days=365)
+                sc scadenza_predefinita = data_visita + datetime.timedelta(days=365)
                 data_scadenza = col_c2.date_input("Data Scadenza Certificato", value=scadenza_predefinita)
                 
                 tipo_visita = col_c1.selectbox("Tipo Visita", ["Agonistica", "Non Agonistica", "Elettrocardiogramma"])
@@ -213,52 +233,30 @@ elif menu == "📋 Certificati Medici":
     with tab3:
         visite_tutte = session.query(VisitaMedica, Atleta).join(Atleta).order_by(VisitaMedica.data_scadenza.desc()).all()
         if visite_tutte:
-            st.dataframe(pd.DataFrame([
-                {
+            data_storico = []
+            oggi = datetime.date.today()
+            
+            for v, a in visite_tutte:
+                giorni_rimanenti = (v.data_scadenza - oggi).days
+                if giorni_rimanenti < 0:
+                    stato_semaforo = "🔴 Scaduto"
+                elif giorni_rimanenti <= 30:
+                    stato_semaforo = "🟡 In scadenza"
+                else:
+                    stato_semaforo = "🟢 Valido"
+                    
+                data_storico.append({
+                    "Stato": stato_semaforo,
                     "Atleta": f"{a.nome} {a.cognome}",
                     "Tipo Visita": v.tipo_visita,
                     "Data Visita": v.data_visita,
                     "Data Scadenza": v.data_scadenza,
                     "Idoneo": "Sì" if v.idoneo else "No"
-                } for v, a in visite_tutte
-            ]), use_container_width=True)
+                })
+                
+            st.dataframe(pd.DataFrame(data_storico), use_container_width=True)
         else:
             st.info("Nessun certificato presente in archivio.")
-
-# ------------------------------------------
-# 4. ENTRATE / QUOTE (CON FORM NUOVO INCASSO)
-# ------------------------------------------
-elif menu == "💳 Entrate (Quote Atleti)":
-    st.header("💳 Registro Incassi Quote")
-    tab1, tab2 = st.tabs(["📋 Elenco Incassi", "➕ Registra Incasso Quota"])
-    
-    with tab1:
-        pagamenti = session.query(Pagamento, Atleta).join(Atleta).all()
-        if pagamenti:
-            st.dataframe(pd.DataFrame([{"Data": p.data_pagamento, "Atleta": f"{a.nome} {a.cognome}", "Causale": p.causale, "Importo (€)": p.importo, "Metodo": p.metodo} for p, a in pagamenti]), use_container_width=True)
-        else:
-            st.info("Nessun incasso registrato.")
-            
-    with tab2:
-        atleti_list = session.query(Atleta).all()
-        if not atleti_list:
-            st.warning("Devi prima registrare almeno un atleta per poter incassare le quote.")
-        else:
-            mappa_atleti = {f"{a.nome} {a.cognome} ({a.codice_fiscale})": a.id for a in atleti_list}
-            with st.form("form_incasso", clear_on_submit=True):
-                scelta_atleta = st.selectbox("Seleziona Atleta", list(mappa_atleti.keys()))
-                causale = st.text_input("Causale (es. Quota Mese di Ottobre Basket)")
-                importo = st.number_input("Importo (€)", min_value=1.0, step=5.0)
-                metodo = st.selectbox("Metodo di Pagamento", ["Bonifico", "Contanti", "POS / Carta"])
-                data_pag = st.date_input("Data Pagamento", value=datetime.date.today())
-                
-                if st.form_submit_button("Registra Incasso"):
-                    atleta_id = mappa_atleti[scelta_atleta]
-                    nuovo_pagamento = Pagamento(atleta_id=atleta_id, causale=causale, importo=importo, metodo=metodo, data_pagamento=data_pag)
-                    session.add(nuovo_pagamento)
-                    session.commit()
-                    st.success("Pagamento registrato correttamente!")
-                    st.rerun()
 
 # ------------------------------------------
 # 5. USCITE / SPESE GENERALI (CON FORM NUOVA SPESA)
