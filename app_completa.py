@@ -249,6 +249,7 @@ elif menu == "📋 Certificati Medici":
             st.dataframe(pd.DataFrame(data_storico), use_container_width=True)
         else:
             st.info("Nessun certificato presente in archivio.")
+            
 
 # ------------------------------------------
 # 5. USCITE / SPESE GENERALI (CON FORM NUOVA SPESA)
