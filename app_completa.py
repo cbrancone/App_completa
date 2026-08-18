@@ -249,7 +249,53 @@ elif menu == "📋 Certificati Medici":
             st.dataframe(pd.DataFrame(data_storico), use_container_width=True)
         else:
             st.info("Nessun certificato presente in archivio.")
+
+# ------------------------------------------
+# 4. ENTRATE / QUOTE (CON FORM NUOVO INCASSO)
+# ------------------------------------------
+elif menu == "💳 Entrate (Quote Atleti)":
+    st.header("💳 Registro Incassi Quote")
+    tab1, tab2 = st.tabs(["📋 Elenco Incassi", "➕ Registra Incasso Quota"])
+    
+    with tab1:
+        pagamenti = session.query(Pagamento, Atleta).join(Atleta).all()
+        if pagamenti:
+            st.dataframe(pd.DataFrame([{
+                "Data": p.data_pagamento, 
+                "Atleta": f"{a.nome} {a.cognome}", 
+                "Causale": p.causale, 
+                "Importo (€)": p.importo, 
+                "Metodo": p.metodo
+            } for p, a in pagamenti]), use_container_width=True)
+        else:
+            st.info("Nessun incasso registrato.")
             
+    with tab2:
+        atleti_list = session.query(Atleta).all()
+        if not atleti_list:
+            st.warning("Devi prima registrare almeno un atleta per poter incassare le quote.")
+        else:
+            mappa_atleti = {f"{a.nome} {a.cognome} ({a.codice_fiscale})": a.id for a in atleti_list}
+            with st.form("form_incasso", clear_on_submit=True):
+                scelta_atleta = st.selectbox("Seleziona Atleta", list(mappa_atleti.keys()))
+                causale = st.text_input("Causale (es. Quota Mese di Ottobre Basket)")
+                importo = st.number_input("Importo (€)", min_value=1.0, step=5.0)
+                metodo = st.selectbox("Metodo di Pagamento", ["Bonifico", "Contanti", "POS / Carta"])
+                data_pag = st.date_input("Data Pagamento", value=datetime.date.today())
+                
+                if st.form_submit_button("Registra Incasso"):
+                    atleta_id = mappa_atleti[scelta_atleta]
+                    nuovo_pagamento = Pagamento(
+                        atleta_id=atleta_id, 
+                        causale=causale, 
+                        importo=importo, 
+                        metodo=metodo, 
+                        data_pagamento=data_pag
+                    )
+                    session.add(nuovo_pagamento)
+                    session.commit()
+                    st.success("Pagamento registrato correttamente!")
+                    st.rerun()
 
 # ------------------------------------------
 # 5. USCITE / SPESE GENERALI (CON FORM NUOVA SPESA)
