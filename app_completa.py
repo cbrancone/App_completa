@@ -89,10 +89,8 @@ elif menu == "🏃 Atleti":
         if not df_atleti.empty:
             edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
             if st.button("💾 Salva modifiche su Google (Atleti)"):
-                res = update_entire_sheet("atleti", edited_df_atleti)
-                if res.get("status") == "success":
-                    st.success("Tabella atleti aggiornata con successo su Google Sheets!")
-                    st.rerun()
+    res = update_entire_sheet("atleti", edited_df_atleti)
+    st.write("Risposta ricevuta da Google:", res)  # <-- Questo ci dirà l'errore esatto
                 else:
                     st.error(f"Errore: {res.get('message')}")
         else:
