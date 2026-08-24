@@ -6,7 +6,7 @@ import requests
 # ==========================================
 # CONFIGURAZIONE WEB APP APPS SCRIPT
 # ==========================================
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxo0TOJ_0JjvuBfkjXApI_ddXvylKfrTglL0SQH7PylcomSIlhr_UgO26kKA_OdXgSB/exec"
+WEB_APP_URL = "https://docs.google.com/spreadsheets/d/1CvMpQnQ2vTJrtTAtWl7NHDNtKP1bEl9J_vbp4jBc3_Q/edit?usp=sharing"
 
 def get_as_df(sheet_name):
     try:
