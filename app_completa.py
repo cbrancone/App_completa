@@ -6,14 +6,15 @@ import requests
 # ==========================================
 # CONFIGURAZIONE WEB APP APPS SCRIPT
 # ==========================================
-WEB_APP_URL = "https://docs.google.com/spreadsheets/d/1CvMpQnQ2vTJrtTAtWl7NHDNtKP1bEl9J_vbp4jBc3_Q/edit?usp=sharing"
+WEB_APP_URL = "INSERISCI_QUI_L_URL_DELLA_WEB_APP_DI_APPS_SCRIPT"
 
 def get_as_df(sheet_name):
     try:
         url = f"{WEB_APP_URL}?action=leggi&sheet={sheet_name}"
         response = requests.get(url)
-        data = response.json()
-        return pd.DataFrame(data)
+        if response.status_code == 200:
+            return pd.DataFrame(response.json())
+        return pd.DataFrame()
     except Exception:
         return pd.DataFrame()
 
@@ -60,14 +61,8 @@ if menu == "📊 Dashboard & Bilancio":
     df_spese = get_as_df("spese_generali")
     
     atleti_attivi = len(df_atleti) if not df_atleti.empty else 0
-    
-    # Gestione automatica del campo importo basata sulle tue intestazioni esatte
-    col_imp_pag = "Importo" if not df_pagamenti.empty and "Importo" in df_pagamenti.columns else "importo"
-    tot_entrate = pd.to_numeric(df_pagamenti[col_imp_pag]).sum() if not df_pagamenti.empty and col_imp_pag in df_pagamenti.columns else 0.0
-    
-    col_imp_spe = "Importo Spesa" if not df_spese.empty and "Importo Spesa" in df_spese.columns else "importo"
-    tot_uscite = pd.to_numeric(df_spese[col_imp_spe]).sum() if not df_spese.empty and col_imp_spe in df_spese.columns else 0.0
-    
+    tot_entrate = pd.to_numeric(df_pagamenti["Importo"]).sum() if not df_pagamenti.empty and "Importo" in df_pagamenti.columns else 0.0
+    tot_uscite = pd.to_numeric(df_spese["Importo Spesa"]).sum() if not df_spese.empty and "Importo Spesa" in df_spese.columns else 0.0
     saldo_netto = tot_entrate - tot_uscite
     
     col1, col2, col3, col4 = st.columns(4)
@@ -87,16 +82,16 @@ elif menu == "🏃 Atleti":
         st.info("💡 Modifica i dati direttamente nella tabella e clicca su 'Salva modifiche su Google'.")
         df_atleti = get_as_df("atleti")
         if not df_atleti.empty:
-            if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_salva_atleti_modifica"):
+            edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
+            if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_atleti"):
                 res = update_entire_sheet("atleti", edited_df_atleti)
-                st.write("Risposta ricevuta da Google:", res)
                 if res.get("status") == "success":
                     st.success("Tabella atleti aggiornata con successo su Google Sheets!")
                     st.rerun()
                 else:
-                    st.error(f"Errore durante il salvataggio: {res.get('message')}")
+                    st.error(f"Errore: {res.get('message')}")
         else:
-            st.info("Nessun atleta registrato.")
+            st.info("Nessun atleta registrato nel foglio `atleti`.")
             
     with tab2:
         with st.form("form_nuovo_atleta", clear_on_submit=True):
@@ -108,15 +103,12 @@ elif menu == "🏃 Atleti":
             email = col_a.text_input("Email")
             telefono = col_b.text_input("Telefono")
             
-            if st.form_submit_button("Salva Atleta"):
+            if st.form_submit_button("Salva Nuovo Atleta"):
                 if nome and cognome and cf:
                     df_esistenti = get_as_df("atleti")
-                    # Controllo basato sulle tue intestazioni esatte
-                    col_cf = "Codice Fiscale" if "Codice Fiscale" in df_esistenti.columns else "codice_fiscale"
-                    if not df_esistenti.empty and col_cf in df_esistenti.columns and cf in df_esistenti[col_cf].values:
+                    if not df_esistenti.empty and "Codice Fiscale" in df_esistenti.columns and cf in df_esistenti["Codice Fiscale"].values:
                         st.error("Errore: Il Codice Fiscale inserito esiste già nel foglio.")
                     else:
-                        # Corrisponde a: Nome, Cognome, Codice Fiscale, Data di Nascita, Email, Telefono
                         res = append_row_to_sheet("atleti", [nome, cognome, cf, str(data_nascita), email, telefono])
                         if res.get("status") == "success":
                             st.success(f"Atleta {nome} {cognome} salvato con successo!")
@@ -164,14 +156,10 @@ elif menu == "📋 Certificati Medici":
             st.info("Nessun certificato registrato.")
 
     with tab2:
-        df_atleti = get_as_df("atleti")
         if df_atleti.empty:
-            st.warning("Devi prima inserire almeno un atleta.")
+            st.warning("Devi prima inserire almeno un atleta nella sezione Atleti.")
         else:
-            col_nome_atleta = "Nome" if "Nome" in df_atleti.columns else "nome"
-            col_cogn_atleta = "Cognome" if "Cognome" in df_atleti.columns else "cognome"
-            lista_atleti = [f"{r.get(col_nome_atleta, '')} {r.get(col_cogn_atleta, '')}".strip() for _, r in df_atleti.iterrows()]
-            
+            lista_atleti = [f"{r.get('Nome', '')} {r.get('Cognome', '')}".strip() for _, r in df_atleti.iterrows()]
             with st.form("form_visita_medica", clear_on_submit=True):
                 scelta_atleta = st.selectbox("Selezione Atleta *", lista_atleti)
                 col_c1, col_c2 = st.columns(2)
@@ -181,7 +169,6 @@ elif menu == "📋 Certificati Medici":
                 idoneo = col_c2.checkbox("Idoneità Concessa", value=True)
                 
                 if st.form_submit_button("Salva Certificato Medico"):
-                    # Corrisponde a: Selezione Atleta, Data Effetuazione Visita, Data scadenza Certificato, Tipo Visita, Idoneità Concessa
                     res = append_row_to_sheet("visite_mediche", [scelta_atleta, str(data_visita), str(data_scadenza), tipo_visita, idoneo])
                     if res.get("status") == "success":
                         st.success("Certificato medico registrato correttamente!")
@@ -190,10 +177,10 @@ elif menu == "📋 Certificati Medici":
                         st.error(f"Errore: {res.get('message')}")
 
     with tab3:
-        st.info("Puoi modificare le visite mediche direttamente qui sotto:")
+        st.info("Puoi modificare lo storico delle visite direttamente qui sotto:")
         if not df_visite.empty:
             edited_df_visite = st.data_editor(df_visite, use_container_width=True, key="editor_visite")
-            if st.button("💾 Salva modifiche su Google (Visite)"):
+            if st.button("💾 Salva modifiche su Google (Visite)", key="btn_visite"):
                 res = update_entire_sheet("visite_mediche", edited_df_visite)
                 if res.get("status") == "success":
                     st.success("Tabella visite aggiornata con successo!")
@@ -216,7 +203,7 @@ elif menu == "💳 Entrate (Quote Atleti)":
     with tab1:
         if not df_pagamenti.empty:
             edited_df_pagamenti = st.data_editor(df_pagamenti, use_container_width=True, key="editor_pagamenti")
-            if st.button("💾 Salva modifiche su Google (Incassi)"):
+            if st.button("💾 Salva modifiche su Google (Incassi)", key="btn_incassi"):
                 res = update_entire_sheet("pagamenti", edited_df_pagamenti)
                 if res.get("status") == "success":
                     st.success("Tabella incassi aggiornata con successo!")
@@ -230,10 +217,7 @@ elif menu == "💳 Entrate (Quote Atleti)":
         if df_atleti.empty:
             st.warning("Devi prima registrare almeno un atleta.")
         else:
-            col_nome_atleta = "Nome" if "Nome" in df_atleti.columns else "nome"
-            col_cogn_atleta = "Cognome" if "Cognome" in df_atleti.columns else "cognome"
-            lista_atleti = [f"{r.get(col_nome_atleta, '')} {r.get(col_cogn_atleta, '')}".strip() for _, r in df_atleti.iterrows()]
-            
+            lista_atleti = [f"{r.get('Nome', '')} {r.get('Cognome', '')}".strip() for _, r in df_atleti.iterrows()]
             with st.form("form_incasso", clear_on_submit=True):
                 scelta_atleta = st.selectbox("Selezione Atleta", lista_atleti)
                 causale = st.text_input("Causale")
@@ -242,7 +226,6 @@ elif menu == "💳 Entrate (Quote Atleti)":
                 data_pag = st.date_input("Data Pagamento", value=datetime.date.today())
                 
                 if st.form_submit_button("Registra Incasso"):
-                    # Corrisponde a: Selezione Atleta, Causale, Importo, Metodo di Pagamento, Data Pagamento
                     res = append_row_to_sheet("pagamenti", [scelta_atleta, causale, importo, metodo, str(data_pag)])
                     if res.get("status") == "success":
                         st.success("Pagamento registrato correttamente!")
@@ -262,7 +245,7 @@ elif menu == "💸 Uscite (Spese Generali)":
     with tab1:
         if not df_spese.empty:
             edited_df_spese = st.data_editor(df_spese, use_container_width=True, key="editor_spese")
-            if st.button("💾 Salva modifiche su Google (Spese)"):
+            if st.button("💾 Salva modifiche su Google (Spese)", key="btn_spese"):
                 res = update_entire_sheet("spese_generali", edited_df_spese)
                 if res.get("status") == "success":
                     st.success("Tabella spese aggiornata con successo!")
@@ -284,7 +267,6 @@ elif menu == "💸 Uscite (Spese Generali)":
             
             if st.form_submit_button("Salva Spesa"):
                 if descrizione and importo > 0:
-                    # Corrisponde a: Descrizione Spesa, Categoria, Importo Spesa, Data del Pagamento, Fornitore/Beneficiario, Metodo di Pagamento Spesa
                     res = append_row_to_sheet("spese_generali", [descrizione, categoria, importo, str(data_spesa), fornitore, metodo])
                     if res.get("status") == "success":
                         st.success("Spesa registrata correttamente!")
