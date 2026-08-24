@@ -6,7 +6,7 @@ import requests
 # ==========================================
 # CONFIGURAZIONE WEB APP APPS SCRIPT
 # ==========================================
-WEB_APP_URL = "INSERISCI_QUI_L_URL_DELLA_WEB_APP_DI_APPS_SCRIPT"
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwBVL6o5Q1ewKQqNR02knauACgCxLX0rTxqfQdwjBU05xjJ8EhE_C_mp-lTlUTJGcWY/exec"
 
 def get_as_df(sheet_name):
     try:
