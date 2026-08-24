@@ -23,7 +23,7 @@ def init_connection():
 gc = init_connection()
 
 # Inserisci qui l'URL completo del tuo Google Sheet
-SPREADSHEET_URL = "INSERISCI_QUI_IL_LINK_DEL_TUO_FOGLIO_GOOGLE"
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CvMpQnQ2vTJrtTAtWl7NHDNtKP1bEl9J_vbp4jBc3_Q/edit?usp=sharing"
 
 try:
     sh = gc.open_by_url(SPREADSHEET_URL)
