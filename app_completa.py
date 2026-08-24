@@ -6,8 +6,7 @@ import requests
 # ==========================================
 # CONFIGURAZIONE WEB APP APPS SCRIPT
 # ==========================================
-# Incolla qui l'URL della Web App ottenuto da Google Apps Script
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUoK6FaLbFglKpeEMLsbYtsS4_WJ6Mr4-wrEBGoPLzJfoTSbp8o99q0sxdiWS5BoUy/exec"
+WEB_APP_URL = "INSERISCI_QUI_L_URL_DELLA_WEB_APP_DI_APPS_SCRIPT"
 
 def get_as_df(sheet_name):
     try:
@@ -26,11 +25,21 @@ def append_row_to_sheet(sheet_name, row_data):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+def update_entire_sheet(sheet_name, df):
+    try:
+        # Prepara intestazioni + righe come matrice
+        data_to_send = [df.columns.tolist()] + df.values.tolist()
+        payload = {"sheet": sheet_name, "action": "update_table", "rows": data_to_send}
+        response = requests.post(WEB_APP_URL, json=payload)
+        return response.json()
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # ==========================================
 # INTERFACCIA STREAMLIT
 # ==========================================
 st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="🏆", layout="wide")
-st.title("🏆 Gestionale & Contabilità Associazione Sportiva (Google Sheets via API)")
+st.title("🏆 Gestionale & Contabilità Associazione Sportiva")
 
 st.sidebar.title("Navigazione")
 menu = st.sidebar.radio("Scegli Sezione:", [
@@ -67,12 +76,20 @@ if menu == "📊 Dashboard & Bilancio":
 # ------------------------------------------
 elif menu == "🏃 Atleti":
     st.header("🏃 Gestione Atleti")
-    tab1, tab2 = st.tabs(["📋 Elenco Atleti", "➕ Registra Nuovo Atleta"])
+    tab1, tab2 = st.tabs(["📋 Modifica ed Elenco Atleti", "➕ Registra Nuovo Atleta"])
     
     with tab1:
+        st.info("💡 Puoi modificare direttamente i dati nella tabella qui sotto e cliccare su 'Salva modifiche su Google' per aggiornare il foglio.")
         df_atleti = get_as_df("atleti")
         if not df_atleti.empty:
-            st.dataframe(df_atleti, use_container_width=True)
+            edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
+            if st.button("💾 Salva modifiche su Google (Atleti)"):
+                res = update_entire_sheet("atleti", edited_df_atleti)
+                if res.get("status") == "success":
+                    st.success("Tabella atleti aggiornata con successo su Google Sheets!")
+                    st.rerun()
+                else:
+                    st.error(f"Errore durante il salvataggio: {res.get('message')}")
         else:
             st.info("Nessun atleta registrato.")
             
@@ -98,16 +115,16 @@ elif menu == "🏃 Atleti":
                             st.success(f"Atleta {nome} {cognome} salvato con successo!")
                             st.rerun()
                         else:
-                            st.error(f"Errore durante il salvataggio: {res.get('message')}")
+                            st.error(f"Errore: {res.get('message')}")
                 else:
-                    st.warning("Compila i campi obbligatori (Nome, Cognome, Codice Fiscale).")
+                    st.warning("Compila i campi obbligatori.")
 
 # ------------------------------------------
 # 3. CERTIFICATI MEDICI
 # ------------------------------------------
 elif menu == "📋 Certificati Medici":
     st.header("📋 Gestione Visite e Certificati Medici")
-    tab1, tab2, tab3 = st.tabs(["⚠️ Certificati in Scadenza", "➕ Inserisci / Rinnova Certificato", "📚 Storico Certificati"])
+    tab1, tab2, tab3 = st.tabs(["⚠️ Certificati in Scadenza", "➕ Inserisci Certificato", "📚 Modifica Storico Certificati"])
     
     df_visite = get_as_df("visite_mediche")
     df_atleti = get_as_df("atleti")
@@ -166,8 +183,16 @@ elif menu == "📋 Certificati Medici":
                         st.error(f"Errore: {res.get('message')}")
 
     with tab3:
+        st.info("Puoi modificare le visite mediche direttamente qui sotto:")
         if not df_visite.empty:
-            st.dataframe(df_visite, use_container_width=True)
+            edited_df_visite = st.data_editor(df_visite, use_container_width=True, key="editor_visite")
+            if st.button("💾 Salva modifiche su Google (Visite)"):
+                res = update_entire_sheet("visite_mediche", edited_df_visite)
+                if res.get("status") == "success":
+                    st.success("Tabella visite aggiornata con successo!")
+                    st.rerun()
+                else:
+                    st.error(f"Errore: {res.get('message')}")
         else:
             st.info("Nessun certificato presente in archivio.")
 
@@ -176,14 +201,21 @@ elif menu == "📋 Certificati Medici":
 # ------------------------------------------
 elif menu == "💳 Entrate (Quote Atleti)":
     st.header("💳 Registro Incassi Quote")
-    tab1, tab2 = st.tabs(["📋 Elenco Incassi", "➕ Registra Incasso Quota"])
+    tab1, tab2 = st.tabs(["📋 Modifica ed Elenco Incassi", "➕ Registra Incasso Quota"])
     
     df_pagamenti = get_as_df("pagamenti")
     df_atleti = get_as_df("atleti")
     
     with tab1:
         if not df_pagamenti.empty:
-            st.dataframe(df_pagamenti, use_container_width=True)
+            edited_df_pagamenti = st.data_editor(df_pagamenti, use_container_width=True, key="editor_pagamenti")
+            if st.button("💾 Salva modifiche su Google (Incassi)"):
+                res = update_entire_sheet("pagamenti", edited_df_pagamenti)
+                if res.get("status") == "success":
+                    st.success("Tabella incassi aggiornata con successo!")
+                    st.rerun()
+                else:
+                    st.error(f"Errore: {res.get('message')}")
         else:
             st.info("Nessun incasso registrato.")
             
@@ -214,13 +246,20 @@ elif menu == "💳 Entrate (Quote Atleti)":
 # ------------------------------------------
 elif menu == "💸 Uscite (Spese Generali)":
     st.header("💸 Gestione Spese Generali dell'Associazione")
-    tab1, tab2 = st.tabs(["📋 Elenco Uscite", "➕ Registra Nuova Spesa"])
+    tab1, tab2 = st.tabs(["📋 Modifica ed Elenco Uscite", "➕ Registra Nuova Spesa"])
     
     df_spese = get_as_df("spese_generali")
     
     with tab1:
         if not df_spese.empty:
-            st.dataframe(df_spese, use_container_width=True)
+            edited_df_spese = st.data_editor(df_spese, use_container_width=True, key="editor_spese")
+            if st.button("💾 Salva modifiche su Google (Spese)"):
+                res = update_entire_sheet("spese_generali", edited_df_spese)
+                if res.get("status") == "success":
+                    st.success("Tabella spese aggiornata con successo!")
+                    st.rerun()
+                else:
+                    st.error(f"Errore: {res.get('message')}")
         else:
             st.info("Nessuna spesa registrata.")
             
