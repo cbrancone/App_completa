@@ -87,12 +87,14 @@ elif menu == "🏃 Atleti":
         st.info("💡 Modifica i dati direttamente nella tabella e clicca su 'Salva modifiche su Google'.")
         df_atleti = get_as_df("atleti")
         if not df_atleti.empty:
-            edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
-            if st.button("💾 Salva modifiche su Google (Atleti)"):
-    res = update_entire_sheet("atleti", edited_df_atleti)
-    st.write("Risposta ricevuta da Google:", res)  # <-- Questo ci dirà l'errore esatto
+            if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_salva_atleti_modifica"):
+                res = update_entire_sheet("atleti", edited_df_atleti)
+                st.write("Risposta ricevuta da Google:", res)
+                if res.get("status") == "success":
+                    st.success("Tabella atleti aggiornata con successo su Google Sheets!")
+                    st.rerun()
                 else:
-                    st.error(f"Errore: {res.get('message')}")
+                    st.error(f"Errore durante il salvataggio: {res.get('message')}")
         else:
             st.info("Nessun atleta registrato.")
             
