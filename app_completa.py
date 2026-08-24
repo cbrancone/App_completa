@@ -1,50 +1,36 @@
 import streamlit as st
 import datetime
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
+import requests
 
 # ==========================================
-# 1. CONFIGURAZIONE CONNESSIONE GOOGLE SHEETS
+# CONFIGURAZIONE WEB APP APPS SCRIPT
 # ==========================================
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+# Incolla qui l'URL della Web App ottenuto da Google Apps Script
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUoK6FaLbFglKpeEMLsbYtsS4_WJ6Mr4-wrEBGoPLzJfoTSbp8o99q0sxdiWS5BoUy/exec"
 
-@st.cache_resource
-def init_connection():
-    credentials = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=SCOPES
-    )
-    return gspread.authorize(credentials)
-
-gc = init_connection()
-
-# Inserisci qui l'URL completo del tuo Google Sheet
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1CvMpQnQ2vTJrtTAtWl7NHDNtKP1bEl9J_vbp4jBc3_Q/edit?usp=sharing"
-
-try:
-    sh = gc.open_by_url(SPREADSHEET_URL)
-except Exception as e:
-    st.error(f"Errore di connessione al Foglio Google. Verifica l'URL o la condivisione con il Service Account. Dettaglio: {e}")
-    st.stop()
-
-# Funzione di supporto per leggere una tabella come DataFrame
-def get_as_df(worksheet_name):
+def get_as_df(sheet_name):
     try:
-        ws = sh.worksheet(worksheet_name)
-        data = ws.get_all_records()
+        url = f"{WEB_APP_URL}?action=leggi&sheet={sheet_name}"
+        response = requests.get(url)
+        data = response.json()
         return pd.DataFrame(data)
     except Exception:
         return pd.DataFrame()
 
+def append_row_to_sheet(sheet_name, row_data):
+    try:
+        payload = {"sheet": sheet_name, "row": row_data}
+        response = requests.post(WEB_APP_URL, json=payload)
+        return response.json()
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # ==========================================
-# 2. INTERFACCIA STREAMLIT
+# INTERFACCIA STREAMLIT
 # ==========================================
 st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="🏆", layout="wide")
-st.title("🏆 Gestionale & Contabilità Associazione Sportiva (Google Sheets)")
+st.title("🏆 Gestionale & Contabilità Associazione Sportiva (Google Sheets via API)")
 
 st.sidebar.title("Navigazione")
 menu = st.sidebar.radio("Scegli Sezione:", [
@@ -65,13 +51,13 @@ if menu == "📊 Dashboard & Bilancio":
     df_pagamenti = get_as_df("pagamenti")
     df_spese = get_as_df("spese_generali")
     
-    atleti_attivi = len(df_atleti[df_atleti["attivo"] == True]) if not df_atleti.empty and "attivo" in df_atleti.columns else len(df_atleti)
-    tot_entrate = df_pagamenti["importo"].sum() if not df_pagamenti.empty and "importo" in df_pagamenti.columns else 0.0
-    tot_uscite = df_spese["importo"].sum() if not df_spese.empty and "importo" in df_spese.columns else 0.0
+    atleti_attivi = len(df_atleti) if not df_atleti.empty else 0
+    tot_entrate = pd.to_numeric(df_pagamenti["importo"]).sum() if not df_pagamenti.empty and "importo" in df_pagamenti.columns else 0.0
+    tot_uscite = pd.to_numeric(df_spese["importo"]).sum() if not df_spese.empty and "importo" in df_spese.columns else 0.0
     saldo_netto = tot_entrate - tot_uscite
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Atleti Totali/Attivi", atleti_attivi)
+    col1.metric("Atleti Registrati", atleti_attivi)
     col2.metric("Totale Entrate", f"€ {tot_entrate:,.2f}")
     col3.metric("Totale Uscite", f"€ {tot_uscite:,.2f}")
     col4.metric("Saldo Cassa Netto", f"€ {saldo_netto:,.2f}")
@@ -102,18 +88,17 @@ elif menu == "🏃 Atleti":
             
             if st.form_submit_button("Salva Atleta"):
                 if nome and cognome and cf:
-                    ws = sh.worksheet("atleti")
                     df_esistenti = get_as_df("atleti")
-                    
-                    # Controllo duplicato codice fiscale
                     if not df_esistenti.empty and "codice_fiscale" in df_esistenti.columns and cf in df_esistenti["codice_fiscale"].values:
                         st.error("Errore: Il Codice Fiscale inserito esiste già nel foglio.")
                     else:
-                        # Trova un ID progressivo
                         nuovo_id = len(df_esistenti) + 1 if not df_esistenti.empty else 1
-                        ws.append_row([nuovo_id, cf, nome, cognome, str(data_nascita), email, telefono, True])
-                        st.success(f"Atleta {nome} {cognome} salvato con successo!")
-                        st.rerun()
+                        res = append_row_to_sheet("atleti", [nuovo_id, cf, nome, cognome, str(data_nascita), email, telefono, True])
+                        if res.get("status") == "success":
+                            st.success(f"Atleta {nome} {cognome} salvato con successo!")
+                            st.rerun()
+                        else:
+                            st.error(f"Errore durante il salvataggio: {res.get('message')}")
                 else:
                     st.warning("Compila i campi obbligatori (Nome, Cognome, Codice Fiscale).")
 
@@ -133,10 +118,8 @@ elif menu == "📋 Certificati Medici":
         limite = oggi + datetime.timedelta(days=giorni)
         
         if not df_visite.empty and not df_atleti.empty:
-            # Uniamo i dati via pandas
             df_unito = pd.merge(df_visite, df_atleti, left_on="atleta_id", right_on="id", suffixes=('_visita', '_atleta'))
             df_unito["data_scadenza_dt"] = pd.to_datetime(df_unito["data_scadenza"]).dt.date
-            
             filtrati = df_unito[df_unito["data_scadenza_dt"] <= limite].sort_values(by="data_scadenza")
             
             if not filtrati.empty:
@@ -146,12 +129,12 @@ elif menu == "📋 Certificati Medici":
                     stato = "🔴 Scaduto" if giorni_rimanenti < 0 else ("🟡 In scadenza" if giorni_rimanenti <= 30 else "🟢 Valido")
                     data_tabella.append({
                         "Stato": stato,
-                        "Atleta": f"{row['nome']} {row['cognome']}",
-                        "Tipo Visita": row["tipo_visita"],
-                        "Data Scadenza": row["data_scadenza"],
+                        "Atleta": f"{row.get('nome', '')} {row.get('cognome', '')}",
+                        "Tipo Visita": row.get("tipo_visita"),
+                        "Data Scadenza": row.get("data_scadenza"),
                         "Giorni Rimanenti": f"{giorni_rimanenti} giorni" if giorni_rimanenti >= 0 else f"Scaduto da {-giorni_rimanenti} giorni",
-                        "Telefono": row["telefono"],
-                        "Email": row["email"]
+                        "Telefono": row.get("telefono"),
+                        "Email": row.get("email")
                     })
                 st.dataframe(pd.DataFrame(data_tabella), use_container_width=True)
             else:
@@ -174,16 +157,17 @@ elif menu == "📋 Certificati Medici":
                 
                 if st.form_submit_button("Salva Certificato Medico"):
                     atleta_id = mappa_atleti[scelta_atleta]
-                    ws = sh.worksheet("visite_mediche")
                     nuovo_id = len(df_visite) + 1 if not df_visite.empty else 1
-                    ws.append_row([nuovo_id, atleta_id, str(data_visita), str(data_scadenza), tipo_visita, idoneo])
-                    st.success("Certificato medico registrato correttamente!")
-                    st.rerun()
+                    res = append_row_to_sheet("visite_mediche", [nuovo_id, atleta_id, str(data_visita), str(data_scadenza), tipo_visita, idoneo])
+                    if res.get("status") == "success":
+                        st.success("Certificato medico registrato correttamente!")
+                        st.rerun()
+                    else:
+                        st.error(f"Errore: {res.get('message')}")
 
     with tab3:
-        if not df_visite.empty and not df_atleti.empty:
-            df_unito = pd.merge(df_visite, df_atleti, left_on="atleta_id", right_on="id")
-            st.dataframe(df_unito[["tipo_visita", "data_visita", "data_scadenza", "idoneo", "nome", "cognome"]], use_container_width=True)
+        if not df_visite.empty:
+            st.dataframe(df_visite, use_container_width=True)
         else:
             st.info("Nessun certificato presente in archivio.")
 
@@ -198,9 +182,8 @@ elif menu == "💳 Entrate (Quote Atleti)":
     df_atleti = get_as_df("atleti")
     
     with tab1:
-        if not df_pagamenti.empty and not df_atleti.empty:
-            df_unito = pd.merge(df_pagamenti, df_atleti, left_on="atleta_id", right_on="id")
-            st.dataframe(df_unito[["data_pagamento", "nome", "cognome", "causale", "importo", "metodo"]], use_container_width=True)
+        if not df_pagamenti.empty:
+            st.dataframe(df_pagamenti, use_container_width=True)
         else:
             st.info("Nessun incasso registrato.")
             
@@ -218,11 +201,13 @@ elif menu == "💳 Entrate (Quote Atleti)":
                 
                 if st.form_submit_button("Registra Incasso"):
                     atleta_id = mappa_atleti[scelta_atleta]
-                    ws = sh.worksheet("pagamenti")
                     nuovo_id = len(df_pagamenti) + 1 if not df_pagamenti.empty else 1
-                    ws.append_row([nuovo_id, atleta_id, str(data_pag), importo, causale, metodo])
-                    st.success("Pagamento registrato correttamente!")
-                    st.rerun()
+                    res = append_row_to_sheet("pagamenti", [nuovo_id, atleta_id, str(data_pag), importo, causale, metodo])
+                    if res.get("status") == "success":
+                        st.success("Pagamento registrato correttamente!")
+                        st.rerun()
+                    else:
+                        st.error(f"Errore: {res.get('message')}")
 
 # ------------------------------------------
 # 5. USCITE / SPESE GENERALI
@@ -251,10 +236,12 @@ elif menu == "💸 Uscite (Spese Generali)":
             
             if st.form_submit_button("Salva Spesa"):
                 if descrizione and importo > 0:
-                    ws = sh.worksheet("spese_generali")
                     nuovo_id = len(df_spese) + 1 if not df_spese.empty else 1
-                    ws.append_row([nuovo_id, descrizione, categoria, importo, str(data_spesa), fornitore, metodo])
-                    st.success("Spesa registrata correttamente!")
-                    st.rerun()
+                    res = append_row_to_sheet("spese_generali", [nuovo_id, descrizione, categoria, importo, str(data_spesa), fornitore, metodo])
+                    if res.get("status") == "success":
+                        st.success("Spesa registrata correttamente!")
+                        st.rerun()
+                    else:
+                        st.error(f"Errore: {res.get('message')}")
                 else:
                     st.warning("Inserisci una descrizione e un importo valido.")
