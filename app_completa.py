@@ -6,7 +6,7 @@ import requests
 # ==========================================
 # CONFIGURAZIONE WEB APP APPS SCRIPT
 # ==========================================
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwBVL6o5Q1ewKQqNR02knauACgCxLX0rTxqfQdwjBU05xjJ8EhE_C_mp-lTlUTJGcWY/exec"
+WEB_APP_URL = "INSERISCI_QUI_L_URL_DELLA_WEB_APP_DI_APPS_SCRIPT"
 
 def get_as_df(sheet_name):
     try:
@@ -27,7 +27,6 @@ def append_row_to_sheet(sheet_name, row_data):
 
 def update_entire_sheet(sheet_name, df):
     try:
-        # Prepara intestazioni + righe come matrice
         data_to_send = [df.columns.tolist()] + df.values.tolist()
         payload = {"sheet": sheet_name, "action": "update_table", "rows": data_to_send}
         response = requests.post(WEB_APP_URL, json=payload)
@@ -61,8 +60,14 @@ if menu == "📊 Dashboard & Bilancio":
     df_spese = get_as_df("spese_generali")
     
     atleti_attivi = len(df_atleti) if not df_atleti.empty else 0
-    tot_entrate = pd.to_numeric(df_pagamenti["importo"]).sum() if not df_pagamenti.empty and "importo" in df_pagamenti.columns else 0.0
-    tot_uscite = pd.to_numeric(df_spese["importo"]).sum() if not df_spese.empty and "importo" in df_spese.columns else 0.0
+    
+    # Gestione automatica del campo importo basata sulle tue intestazioni esatte
+    col_imp_pag = "Importo" if not df_pagamenti.empty and "Importo" in df_pagamenti.columns else "importo"
+    tot_entrate = pd.to_numeric(df_pagamenti[col_imp_pag]).sum() if not df_pagamenti.empty and col_imp_pag in df_pagamenti.columns else 0.0
+    
+    col_imp_spe = "Importo Spesa" if not df_spese.empty and "Importo Spesa" in df_spese.columns else "importo"
+    tot_uscite = pd.to_numeric(df_spese[col_imp_spe]).sum() if not df_spese.empty and col_imp_spe in df_spese.columns else 0.0
+    
     saldo_netto = tot_entrate - tot_uscite
     
     col1, col2, col3, col4 = st.columns(4)
@@ -79,7 +84,7 @@ elif menu == "🏃 Atleti":
     tab1, tab2 = st.tabs(["📋 Modifica ed Elenco Atleti", "➕ Registra Nuovo Atleta"])
     
     with tab1:
-        st.info("💡 Puoi modificare direttamente i dati nella tabella qui sotto e cliccare su 'Salva modifiche su Google' per aggiornare il foglio.")
+        st.info("💡 Modifica i dati direttamente nella tabella e clicca su 'Salva modifiche su Google'.")
         df_atleti = get_as_df("atleti")
         if not df_atleti.empty:
             edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
@@ -89,7 +94,7 @@ elif menu == "🏃 Atleti":
                     st.success("Tabella atleti aggiornata con successo su Google Sheets!")
                     st.rerun()
                 else:
-                    st.error(f"Errore durante il salvataggio: {res.get('message')}")
+                    st.error(f"Errore: {res.get('message')}")
         else:
             st.info("Nessun atleta registrato.")
             
@@ -106,11 +111,13 @@ elif menu == "🏃 Atleti":
             if st.form_submit_button("Salva Atleta"):
                 if nome and cognome and cf:
                     df_esistenti = get_as_df("atleti")
-                    if not df_esistenti.empty and "codice_fiscale" in df_esistenti.columns and cf in df_esistenti["codice_fiscale"].values:
+                    # Controllo basato sulle tue intestazioni esatte
+                    col_cf = "Codice Fiscale" if "Codice Fiscale" in df_esistenti.columns else "codice_fiscale"
+                    if not df_esistenti.empty and col_cf in df_esistenti.columns and cf in df_esistenti[col_cf].values:
                         st.error("Errore: Il Codice Fiscale inserito esiste già nel foglio.")
                     else:
-                        nuovo_id = len(df_esistenti) + 1 if not df_esistenti.empty else 1
-                        res = append_row_to_sheet("atleti", [nuovo_id, cf, nome, cognome, str(data_nascita), email, telefono, True])
+                        # Corrisponde a: Nome, Cognome, Codice Fiscale, Data di Nascita, Email, Telefono
+                        res = append_row_to_sheet("atleti", [nome, cognome, cf, str(data_nascita), email, telefono])
                         if res.get("status") == "success":
                             st.success(f"Atleta {nome} {cognome} salvato con successo!")
                             st.rerun()
@@ -134,10 +141,9 @@ elif menu == "📋 Certificati Medici":
         oggi = datetime.date.today()
         limite = oggi + datetime.timedelta(days=giorni)
         
-        if not df_visite.empty and not df_atleti.empty:
-            df_unito = pd.merge(df_visite, df_atleti, left_on="atleta_id", right_on="id", suffixes=('_visita', '_atleta'))
-            df_unito["data_scadenza_dt"] = pd.to_datetime(df_unito["data_scadenza"]).dt.date
-            filtrati = df_unito[df_unito["data_scadenza_dt"] <= limite].sort_values(by="data_scadenza")
+        if not df_visite.empty:
+            df_visite["data_scadenza_dt"] = pd.to_datetime(df_visite["Data scadenza Certificato"]).dt.date
+            filtrati = df_visite[df_visite["data_scadenza_dt"] <= limite].sort_values(by="Data scadenza Certificato")
             
             if not filtrati.empty:
                 data_tabella = []
@@ -146,36 +152,37 @@ elif menu == "📋 Certificati Medici":
                     stato = "🔴 Scaduto" if giorni_rimanenti < 0 else ("🟡 In scadenza" if giorni_rimanenti <= 30 else "🟢 Valido")
                     data_tabella.append({
                         "Stato": stato,
-                        "Atleta": f"{row.get('nome', '')} {row.get('cognome', '')}",
-                        "Tipo Visita": row.get("tipo_visita"),
-                        "Data Scadenza": row.get("data_scadenza"),
-                        "Giorni Rimanenti": f"{giorni_rimanenti} giorni" if giorni_rimanenti >= 0 else f"Scaduto da {-giorni_rimanenti} giorni",
-                        "Telefono": row.get("telefono"),
-                        "Email": row.get("email")
+                        "Atleta": row.get("Selezione Atleta", ""),
+                        "Tipo Visita": row.get("Tipo Visita", ""),
+                        "Data Scadenza": row.get("Data scadenza Certificato", ""),
+                        "Giorni Rimanenti": f"{giorni_rimanenti} giorni" if giorni_rimanenti >= 0 else f"Scaduto da {-giorni_rimanenti} giorni"
                     })
                 st.dataframe(pd.DataFrame(data_tabella), use_container_width=True)
             else:
                 st.success("Nessun certificato in scadenza nel periodo selezionato!")
         else:
-            st.info("Dati insufficienti o nessun certificato registrato.")
+            st.info("Nessun certificato registrato.")
 
     with tab2:
+        df_atleti = get_as_df("atleti")
         if df_atleti.empty:
             st.warning("Devi prima inserire almeno un atleta.")
         else:
-            mappa_atleti = {f"{row['nome']} {row['cognome']} ({row['codice_fiscale']})": row['id'] for _, row in df_atleti.iterrows()}
+            col_nome_atleta = "Nome" if "Nome" in df_atleti.columns else "nome"
+            col_cogn_atleta = "Cognome" if "Cognome" in df_atleti.columns else "cognome"
+            lista_atleti = [f"{r.get(col_nome_atleta, '')} {r.get(col_cogn_atleta, '')}".strip() for _, r in df_atleti.iterrows()]
+            
             with st.form("form_visita_medica", clear_on_submit=True):
-                scelta_atleta = st.selectbox("Seleziona Atleta *", list(mappa_atleti.keys()))
+                scelta_atleta = st.selectbox("Selezione Atleta *", lista_atleti)
                 col_c1, col_c2 = st.columns(2)
-                data_visita = col_c1.date_input("Data Effettuazione Visita", value=datetime.date.today())
-                data_scadenza = col_c2.date_input("Data Scadenza Certificato", value=data_visita + datetime.timedelta(days=365))
+                data_visita = col_c1.date_input("Data Effetuazione Visita", value=datetime.date.today())
+                data_scadenza = col_c2.date_input("Data scadenza Certificato", value=data_visita + datetime.timedelta(days=365))
                 tipo_visita = col_c1.selectbox("Tipo Visita", ["Agonistica", "Non Agonistica", "Elettrocardiogramma"])
                 idoneo = col_c2.checkbox("Idoneità Concessa", value=True)
                 
                 if st.form_submit_button("Salva Certificato Medico"):
-                    atleta_id = mappa_atleti[scelta_atleta]
-                    nuovo_id = len(df_visite) + 1 if not df_visite.empty else 1
-                    res = append_row_to_sheet("visite_mediche", [nuovo_id, atleta_id, str(data_visita), str(data_scadenza), tipo_visita, idoneo])
+                    # Corrisponde a: Selezione Atleta, Data Effetuazione Visita, Data scadenza Certificato, Tipo Visita, Idoneità Concessa
+                    res = append_row_to_sheet("visite_mediche", [scelta_atleta, str(data_visita), str(data_scadenza), tipo_visita, idoneo])
                     if res.get("status") == "success":
                         st.success("Certificato medico registrato correttamente!")
                         st.rerun()
@@ -223,18 +230,20 @@ elif menu == "💳 Entrate (Quote Atleti)":
         if df_atleti.empty:
             st.warning("Devi prima registrare almeno un atleta.")
         else:
-            mappa_atleti = {f"{row['nome']} {row['cognome']} ({row['codice_fiscale']})": row['id'] for _, row in df_atleti.iterrows()}
+            col_nome_atleta = "Nome" if "Nome" in df_atleti.columns else "nome"
+            col_cogn_atleta = "Cognome" if "Cognome" in df_atleti.columns else "cognome"
+            lista_atleti = [f"{r.get(col_nome_atleta, '')} {r.get(col_cogn_atleta, '')}".strip() for _, r in df_atleti.iterrows()]
+            
             with st.form("form_incasso", clear_on_submit=True):
-                scelta_atleta = st.selectbox("Seleziona Atleta", list(mappa_atleti.keys()))
-                causale = st.text_input("Causale (es. Quota Mese)")
+                scelta_atleta = st.selectbox("Selezione Atleta", lista_atleti)
+                causale = st.text_input("Causale")
                 importo = st.number_input("Importo (€)", min_value=1.0, step=5.0)
                 metodo = st.selectbox("Metodo di Pagamento", ["Bonifico", "Contanti", "POS / Carta"])
                 data_pag = st.date_input("Data Pagamento", value=datetime.date.today())
                 
                 if st.form_submit_button("Registra Incasso"):
-                    atleta_id = mappa_atleti[scelta_atleta]
-                    nuovo_id = len(df_pagamenti) + 1 if not df_pagamenti.empty else 1
-                    res = append_row_to_sheet("pagamenti", [nuovo_id, atleta_id, str(data_pag), importo, causale, metodo])
+                    # Corrisponde a: Selezione Atleta, Causale, Importo, Metodo di Pagamento, Data Pagamento
+                    res = append_row_to_sheet("pagamenti", [scelta_atleta, causale, importo, metodo, str(data_pag)])
                     if res.get("status") == "success":
                         st.success("Pagamento registrato correttamente!")
                         st.rerun()
@@ -268,15 +277,15 @@ elif menu == "💸 Uscite (Spese Generali)":
             col_1, col_2 = st.columns(2)
             descrizione = col_1.text_input("Descrizione Spesa")
             categoria = col_2.selectbox("Categoria", ["Affitto Palestra", "Utenze", "Istruttori", "Materiale", "Altro"])
-            importo = col_1.number_input("Importo (€)", min_value=0.01, step=10.0)
+            importo = col_1.number_input("Importo Spesa (€)", min_value=0.01, step=10.0)
             data_spesa = col_2.date_input("Data del Pagamento", value=datetime.date.today())
-            fornitore = col_1.text_input("Fornitore")
-            metodo = col_2.selectbox("Metodo Pagamento", ["Bonifico", "Carta / POS", "Contanti"])
+            fornitore = col_1.text_input("Fornitore/Beneficiario")
+            metodo = col_2.selectbox("Metodo di Pagamento Spesa", ["Bonifico", "Carta / POS", "Contanti"])
             
             if st.form_submit_button("Salva Spesa"):
                 if descrizione and importo > 0:
-                    nuovo_id = len(df_spese) + 1 if not df_spese.empty else 1
-                    res = append_row_to_sheet("spese_generali", [nuovo_id, descrizione, categoria, importo, str(data_spesa), fornitore, metodo])
+                    # Corrisponde a: Descrizione Spesa, Categoria, Importo Spesa, Data del Pagamento, Fornitore/Beneficiario, Metodo di Pagamento Spesa
+                    res = append_row_to_sheet("spese_generali", [descrizione, categoria, importo, str(data_spesa), fornitore, metodo])
                     if res.get("status") == "success":
                         st.success("Spesa registrata correttamente!")
                         st.rerun()
