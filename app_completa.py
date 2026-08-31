@@ -71,8 +71,7 @@ authenticator = stauth.Authenticate(
 )
 
 # Mostra il form di login nella schermata principale
-name, authentication_status, username = authenticator.login("Login", location="main")
-
+name, authentication_status, username = authenticator.login(location="main", fields={"Form name": "Login"})
 if authentication_status == False:
     st.error("⚠️ Username o password errati.")
 elif authentication_status == None:
