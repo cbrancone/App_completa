@@ -1,7 +1,7 @@
-import streamlit as st
 import datetime
 import pandas as pd
 import requests
+import streamlit as st
 import streamlit_authenticator as stauth
 
 # ==========================================
@@ -31,7 +31,6 @@ def append_row_to_sheet(sheet_name, row_data):
 
 def update_entire_sheet(sheet_name, df):
     try:
-        # Assicuriamoci di convertire tutto in stringhe/tipi base per evitare errori JSON
         df_clean = df.fillna("")
         data_to_send = [df_clean.columns.tolist()] + df_clean.values.tolist()
         payload = {"sheet": sheet_name, "action": "update_table", "rows": data_to_send}
@@ -47,7 +46,7 @@ st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="�
 
 df_utenti = get_as_df("utenti")
 
-# Inizializziamo l'admin se il foglio è vuoto (con tutte e 6 le colonne richieste)
+# Inizializziamo l'admin se il foglio è vuoto
 if df_utenti.empty or "Username" not in df_utenti.columns:
     default_user_row = ["admin", "admin123", "Amministratore", "admin@email.com", "admin", "Amministratore"]
     append_row_to_sheet("utenti", default_user_row)
@@ -56,13 +55,11 @@ if df_utenti.empty or "Username" not in df_utenti.columns:
 credentials = {"usernames": {}}
 user_roles = {}
 
-# Mappatura accurata degli utenti prelevati da Google Sheets
 if not df_utenti.empty and "Username" in df_utenti.columns:
     for _, row in df_utenti.iterrows():
         username = str(row.get("Username", "")).strip()
         password_db = str(row.get("Password", "")).strip()
         ruolo = str(row.get("Ruolo", "user")).strip().lower()
-        # Recupera il nome da una delle due colonne disponibili
         nome_db = str(row.get("Nome Completo", row.get("Nome e Cognome", username))).strip()
         email_db = str(row.get("Email", "")).strip()
             
@@ -77,7 +74,6 @@ if not df_utenti.empty and "Username" in df_utenti.columns:
             else:
                 user_roles[username] = ruolo if ruolo in ["admin", "user"] else "user"
 
-# Fallback di sicurezza se l'admin non viene letto correttamente
 if "admin" not in credentials["usernames"]:
     credentials["usernames"]["admin"] = {
         "name": "Amministratore",
@@ -91,10 +87,15 @@ authenticator = stauth.Authenticate(
     cookie_name='gestionale_as_cookie_unique_id',
     key='gestionale_as_signature_key',
     cookie_expiry_days=30,
-    auto_hash=False # Disattivato auto_hash per consentire la lettura in chiaro delle password dal foglio
+    auto_hash=False
 )
 
-authenticator.login(location="main")
+# Login standard compatibile con le versioni recenti di streamlit-authenticator
+try:
+    authenticator.login()
+except TypeError:
+    # Fallback per firme di metodi differenti in base alla versione specifica installata
+    authenticator.login(location="main")
 
 authentication_status = st.session_state.get("authentication_status")
 name = st.session_state.get("name")
@@ -252,14 +253,17 @@ elif authentication_status == True:
             oggi = datetime.date.today()
             limite = oggi + datetime.timedelta(days=giorni)
             
-            if not df_visite.empty:
-                df_visite["data_scadenza_dt"] = pd.to_datetime(df_visite["Data scadenza Certificato"]).dt.date
+            if not df_visite.empty and "Data scadenza Certificato" in df_visite.columns:
+                df_visite["data_scadenza_dt"] = pd.to_datetime(df_visite["Data scadenza Certificato"], errors='coerce').dt.date
                 filtrati = df_visite[df_visite["data_scadenza_dt"] <= limite].sort_values(by="Data scadenza Certificato")
                 
                 if not filtrati.empty:
                     data_tabella = []
                     for _, row in filtrati.iterrows():
-                        giorni_rimanenti = (row["data_scadenza_dt"] - oggi).days
+                        scad_dt = row["data_scadenza_dt"]
+                        if pd.isna(scad_dt):
+                            continue
+                        giorni_rimanenti = (scad_dt - oggi).days
                         stato = "🔴 Scaduto" if giorni_rimanenti < 0 else ("🟡 In scadenza" if giorni_rimanenti <= 30 else "🟢 Valido")
                         data_tabella.append({
                             "Stato": stato,
@@ -268,7 +272,10 @@ elif authentication_status == True:
                             "Data Scadenza": row.get("Data scadenza Certificato", ""),
                             "Giorni Rimanenti": f"{giorni_rimanenti} giorni" if giorni_rimanenti >= 0 else f"Scaduto da {-giorni_rimanenti} giorni"
                         })
-                    st.dataframe(pd.DataFrame(data_tabella), use_container_width=True)
+                    if data_tabella:
+                        st.dataframe(pd.DataFrame(data_tabella), use_container_width=True)
+                    else:
+                        st.success("Nessun certificato in scadenza nel periodo selezionato!")
                 else:
                     st.success("Nessun certificato in scadenza nel periodo selezionato!")
             else:
@@ -475,10 +482,7 @@ elif authentication_status == True:
                         if not df_utenti_sheet.empty and "Username" in df_utenti_sheet.columns and nuovo_user in df_utenti_sheet["Username"].values:
                             st.error("Errore: Questo username esiste già.")
                         else:
-                            # ⚠️ Qui passiamo ESATTAMENTE le 6 colonne nel tuo ordine:
-                            # Username, Password, Nome Completo, Email, Ruolo, Nome e Cognome
                             nuova_riga = [nuovo_user, nuova_pass, nome_completo, email_utente, ruolo_utente, nome_completo]
-                            
                             res = append_row_to_sheet("utenti", nuova_riga)
                             if res.get("status") == "success":
                                 st.success(f"Utente '{nuovo_user}' creato con successo!")
