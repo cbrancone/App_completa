@@ -71,7 +71,7 @@ authenticator = stauth.Authenticate(
 )
 
 # Mostra il form di login nella schermata principale
-name, authentication_status, username = authenticator.login("Login Gestionale Associazione", "main")
+name, authentication_status, username = authenticator.login("Login", location="main")
 
 if authentication_status == False:
     st.error("⚠️ Username o password errati.")
