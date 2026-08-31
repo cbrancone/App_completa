@@ -105,13 +105,19 @@ elif authentication_status == True:
     st.sidebar.divider()
 
     st.sidebar.title("Navigazione")
-    menu = st.sidebar.radio("Scegli Sezione:", [
+    lista_menu = [
         "📊 Dashboard & Bilancio", 
         "🏃 Atleti", 
         "📋 Certificati Medici", 
         "💳 Entrate (Quote Atleti)", 
         "💸 Uscite (Spese Generali)"
-    ])
+    ]
+    
+    # Mostra la gestione utenti solo se l'utente loggato è admin
+    if username == "admin":
+        lista_menu.append("👥 Gestione Utenti")
+
+    menu = st.sidebar.radio("Scegli Sezione:", lista_menu)
 
     # ------------------------------------------
     # 1. DASHBOARD & BILANCIO
@@ -142,8 +148,8 @@ elif authentication_status == True:
         tab1, tab2 = st.tabs(["📋 Modifica ed Elenco Atleti", "➕ Registra Nuovo Atleta"])
         
         with tab1:
-            df_atleti = get_as_df("atleti")
-            if not df_atleti.empty:
+            df_atleti_completo = get_as_df("atleti")
+            if not df_atleti_completo.empty:
                 st.write("🎯 **Filtra Atleti per Categoria:**")
                 cols_cat_atleti = st.columns(len(LISTA_CATEGORIE) + 1)
                 
@@ -158,24 +164,31 @@ elif authentication_status == True:
                     if cols_cat_atleti[i+1].button(f"🟢 {cat}", key=f"btn_atleti_{cat}"):
                         st.session_state.filtro_atleti_attivo = cat
                         st.rerun()
-                        
+                
+                df_filtrato = df_atleti_completo.copy()
                 if st.session_state.filtro_atleti_attivo != "Tutti":
-                    st.info(f"Stai visualizzando solo gli atleti della categoria: **{st.session_state.filtro_atleti_attivo}**")
-                    if "Categoria" in df_atleti.columns:
-                        df_atleti = df_atleti[df_atleti["Categoria"] == st.session_state.filtro_atleti_attivo]
+                    st.info(f"Stai visualizzando solo gli atleti della categoria: **{st.session_state.filtro_atleti_attivo}** (Le modifiche e cancellazioni terranno conto di tutto il database).")
+                    if "Categoria" in df_filtrato.columns:
+                        df_filtrato = df_filtrato[df_filtrato["Categoria"] == st.session_state.filtro_atleti_attivo]
 
-                # Barra di ricerca testuale per gli atleti
                 ricerca_atleta = st.text_input("🔎 Cerca per Nome, Cognome o Codice Fiscale:", "", key="ricerca_atleti_input")
                 if ricerca_atleta:
-                    mask_atleti = df_atleti.astype(str).apply(lambda x: x.str.contains(ricerca_atleta, case=False)).any(axis=1)
-                    df_atleti = df_atleti[mask_atleti]
+                    mask_atleti = df_filtrato.astype(str).apply(lambda x: x.str.contains(ricerca_atleta, case=False)).any(axis=1)
+                    df_filtrato = df_filtrato[mask_atleti]
 
-                st.info("💡 **Istruzioni:** Puoi modificare i dati direttamente cliccando sulle celle. Per **eliminare un atleta**, seleziona la riga spuntandola a sinistra nella tabella e premi il tasto *Canc* (o *Backspace*) sulla tastiera, oppure clicca sull'icona del cestino/rimuovi riga, quindi clicca sul pulsante sottostante per salvare.")
+                st.info("💡 **Istruzioni:** Modifica i dati o elimina le righelezionandole e premendo *Canc*.")
                 
-                edited_df_atleti = st.data_editor(df_atleti, num_rows="dynamic", use_container_width=True, key="editor_atleti")
+                edited_df_filtrato = st.data_editor(df_filtrato, num_rows="dynamic", use_container_width=True, key="editor_atleti")
                 
                 if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_atleti"):
-                    res = update_entire_sheet("atleti", edited_df_atleti)
+                    # Ricostruiamo il dataframe completo unendo le parti non visualizzate con quelle modificate
+                    if st.session_state.filtro_atleti_attivo != "Tutti" and "Categoria" in df_atleti_completo.columns:
+                        df_resto = df_atleti_completo[df_atleti_completo["Categoria"] != st.session_state.filtro_atleti_attivo]
+                        df_finale = pd.concat([df_resto, edited_df_filtrato], ignore_index=True)
+                    else:
+                        df_finale = edited_df_filtrato
+                        
+                    res = update_entire_sheet("atleti", df_finale)
                     if res.get("status") == "success":
                         st.success("Tabella atleti aggiornata con successo su Google Sheets!")
                         st.rerun()
@@ -289,11 +302,11 @@ elif authentication_status == True:
         st.header("💳 Registro Incassi Quote")
         tab1, tab2 = st.tabs(["📋 Modifica ed Elenco Incassi", "➕ Registra Incasso Quota"])
         
-        df_pagamenti = get_as_df("pagamenti")
+        df_pagamenti_completo = get_as_df("pagamenti")
         df_atleti = get_as_df("atleti")
         
         with tab1:
-            if not df_pagamenti.empty:
+            if not df_pagamenti_completo.empty:
                 st.write("🎯 **Filtra Incassi per Categoria:**")
                 cols_cat_pag = st.columns(len(LISTA_CATEGORIE) + 1)
                 
@@ -308,20 +321,28 @@ elif authentication_status == True:
                     if cols_cat_pag[i+1].button(f"🟢 {cat}", key=f"btn_pag_{cat}"):
                         st.session_state.filtro_pag_attivo = cat
                         st.rerun()
-                        
+                
+                df_pag_filtrato = df_pagamenti_completo.copy()
                 if st.session_state.filtro_pag_attivo != "Tutti":
                     st.info(f"Stai visualizzando solo gli incassi della categoria: **{st.session_state.filtro_pag_attivo}**")
-                    if "Categoria" in df_pagamenti.columns:
-                        df_pagamenti = df_pagamenti[df_pagamenti["Categoria"] == st.session_state.filtro_pag_attivo]
+                    if "Categoria" in df_pag_filtrato.columns:
+                        df_pag_filtrato = df_pag_filtrato[df_pag_filtrato["Categoria"] == st.session_state.filtro_pag_attivo]
 
                 ricerca_testo = st.text_input("🔎 Cerca per Atleta o Causale:", "", key="ricerca_incassi")
                 if ricerca_testo:
-                    mask = df_pagamenti.astype(str).apply(lambda x: x.str.contains(ricerca_testo, case=False)).any(axis=1)
-                    df_pagamenti = df_pagamenti[mask]
+                    mask = df_pag_filtrato.astype(str).apply(lambda x: x.str.contains(ricerca_testo, case=False)).any(axis=1)
+                    df_pag_filtrato = df_pag_filtrato[mask]
 
-                edited_df_pagamenti = st.data_editor(df_pagamenti, use_container_width=True, key="editor_pagamenti")
+                edited_df_pagamenti = st.data_editor(df_pag_filtrato, num_rows="dynamic", use_container_width=True, key="editor_pagamenti")
+                
                 if st.button("💾 Salva modifiche su Google (Incassi)", key="btn_incassi"):
-                    res = update_entire_sheet("pagamenti", edited_df_pagamenti)
+                    if st.session_state.filtro_pag_attivo != "Tutti" and "Categoria" in df_pagamenti_completo.columns:
+                        df_pag_resto = df_pagamenti_completo[df_pagamenti_completo["Categoria"] != st.session_state.filtro_pag_attivo]
+                        df_pag_finale = pd.concat([df_pag_resto, edited_df_pagamenti], ignore_index=True)
+                    else:
+                        df_pag_finale = edited_df_pagamenti
+                        
+                    res = update_entire_sheet("pagamenti", df_pag_finale)
                     if res.get("status") == "success":
                         st.success("Tabella incassi aggiornata con successo!")
                         st.rerun()
@@ -363,7 +384,7 @@ elif authentication_status == True:
         
         with tab1:
             if not df_spese.empty:
-                edited_df_spese = st.data_editor(df_spese, use_container_width=True, key="editor_spese")
+                edited_df_spese = st.data_editor(df_spese, num_rows="dynamic", use_container_width=True, key="editor_spese")
                 if st.button("💾 Salva modifiche su Google (Spese)", key="btn_spese"):
                     res = update_entire_sheet("spese_generali", edited_df_spese)
                     if res.get("status") == "success":
@@ -394,3 +415,48 @@ elif authentication_status == True:
                             st.error(f"Errore: {res.get('message')}")
                     else:
                         st.warning("Inserisci una descrizione e un importo valido.")
+
+    # ------------------------------------------
+    # 6. GESTIONE UTENTI (SOLO ADMIN)
+    # ------------------------------------------
+    elif menu == "👥 Gestione Utenti" and username == "admin":
+        st.header("👥 Gestione Utenti del Gestionale")
+        tab_u1, tab_u2 = st.tabs(["📋 Elenco e Modifica Utenti", "➕ Crea Nuovo Utente"])
+        
+        df_utenti_sheet = get_as_df("utenti")
+        
+        with tab_u1:
+            if not df_utenti_sheet.empty:
+                st.info("Puoi modificare le credenziali o cancellare utenti dalla tabella sottostante:")
+                edited_df_utenti = st.data_editor(df_utenti_sheet, num_rows="dynamic", use_container_width=True, key="editor_utenti")
+                if st.button("💾 Salva modifiche su Google (Utenti)", key="btn_salva_utenti"):
+                    res = update_entire_sheet("utenti", edited_df_utenti)
+                    if res.get("status") == "success":
+                        st.success("Tabella utenti aggiornata con successo! Ricarica la pagina per applicare le modifiche di accesso.")
+                        st.rerun()
+                    else:
+                        st.error(f"Errore: {res.get('message')}")
+            else:
+                st.info("Nessun utente trovato.")
+                
+        with tab_u2:
+            with st.form("form_nuovo_utente", clear_on_submit=True):
+                col_u1, col_u2 = st.columns(2)
+                nuovo_user = col_u1.text_input("Username (es. mario.rossi) *").strip()
+                nuova_pass = col_u2.text_input("Password *", type="password")
+                nome_completo = col_u1.text_input("Nome e Cognome *")
+                email_utente = col_u2.text_input("Email (opzionale)")
+                
+                if st.form_submit_button("Crea Nuovo Utente"):
+                    if nuovo_user and nuova_pass and nome_completo:
+                        if not df_utenti_sheet.empty and "Username" in df_utenti_sheet.columns and nuovo_user in df_utenti_sheet["Username"].values:
+                            st.error("Errore: Questo username esiste già.")
+                        else:
+                            res = append_row_to_sheet("utenti", [nuovo_user, nuova_pass, nome_completo, email_utente])
+                            if res.get("status") == "success":
+                                st.success(f"Utente '{nuovo_user}' creato con successo!")
+                                st.rerun()
+                            else:
+                                st.error(f"Errore: {res.get('message')}")
+                    else:
+                        st.warning("Compila tutti i campi obbligatori contrassegnati con l'asterisco.")
