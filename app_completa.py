@@ -144,28 +144,35 @@ elif authentication_status == True:
         with tab1:
             df_atleti = get_as_df("atleti")
             if not df_atleti.empty:
-                if "Categoria" in df_atleti.columns:
-                    st.write("🎯 **Filtra per Categoria:**")
-                    cols_cat = st.columns(len(LISTA_CATEGORIE) + 1)
+                st.write("🎯 **Filtra Atleti per Categoria:**")
+                cols_cat_atleti = st.columns(len(LISTA_CATEGORIE) + 1)
+                
+                if "filtro_atleti_attivo" not in st.session_state:
+                    st.session_state.filtro_atleti_attivo = "Tutti"
+                
+                if cols_cat_atleti[0].button("⚪ Tutti", key="btn_atleti_tutti"):
+                    st.session_state.filtro_atleti_attivo = "Tutti"
+                    st.rerun()
                     
-                    # Inizializza lo stato del filtro se non esiste
-                    if "filtro_atleti_attivo" not in st.session_state:
-                        st.session_state.filtro_atleti_attivo = "Tutti"
-                    
-                    if cols_cat[0].button("⚪ Tutti", key="btn_atleti_tutti"):
-                        st.session_state.filtro_atleti_attivo = "Tutti"
+                for i, cat in enumerate(LISTA_CATEGORIE):
+                    if cols_cat_atleti[i+1].button(f"🟢 {cat}", key=f"btn_atleti_{cat}"):
+                        st.session_state.filtro_atleti_attivo = cat
                         st.rerun()
                         
-                    for i, cat in enumerate(LISTA_CATEGORIE):
-                        if cols_cat[i+1].button(f"🟢 {cat}", key=f"btn_atleti_{cat}"):
-                            st.session_state.filtro_atleti_attivo = cat
-                            st.rerun()
-                            
-                    if st.session_state.filtro_atleti_attivo != "Tutti":
-                        st.info(F"Stai visualizzando solo la categoria: **{st.session_state.filtro_atleti_attivo}**")
+                if st.session_state.filtro_atleti_attivo != "Tutti":
+                    st.info(f"Stai visualizzando solo gli atleti della categoria: **{st.session_state.filtro_atleti_attivo}**")
+                    if "Categoria" in df_atleti.columns:
                         df_atleti = df_atleti[df_atleti["Categoria"] == st.session_state.filtro_atleti_attivo]
 
-                edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
+                # Barra di ricerca testuale per gli atleti
+                ricerca_atleta = st.text_input("🔎 Cerca per Nome, Cognome o Codice Fiscale:", "", key="ricerca_atleti_input")
+                if ricerca_atleta:
+                    mask_atleti = df_atleti.astype(str).apply(lambda x: x.str.contains(ricerca_atleta, case=False)).any(axis=1)
+                    df_atleti = df_atleti[mask_atleti]
+
+                st.info("💡 **Istruzioni:** Puoi modificare i dati direttamente cliccando sulle celle. Per **eliminare un atleta**, seleziona la riga spuntandola a sinistra nella tabella e premi il tasto *Canc* (o *Backspace*) sulla tastiera, oppure clicca sull'icona del cestino/rimuovi riga, quindi clicca sul pulsante sottostante per salvare.")
+                
+                edited_df_atleti = st.data_editor(df_atleti, num_rows="dynamic", use_container_width=True, key="editor_atleti")
                 
                 if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_atleti"):
                     res = update_entire_sheet("atleti", edited_df_atleti)
@@ -307,7 +314,6 @@ elif authentication_status == True:
                     if "Categoria" in df_pagamenti.columns:
                         df_pagamenti = df_pagamenti[df_pagamenti["Categoria"] == st.session_state.filtro_pag_attivo]
 
-                # Barra di ricerca testuale aggiuntiva
                 ricerca_testo = st.text_input("🔎 Cerca per Atleta o Causale:", "", key="ricerca_incassi")
                 if ricerca_testo:
                     mask = df_pagamenti.astype(str).apply(lambda x: x.str.contains(ricerca_testo, case=False)).any(axis=1)
