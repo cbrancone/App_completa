@@ -75,7 +75,7 @@ authenticator = stauth.Authenticate(
     cookie_name='gestionale_as_cookie_unique_id',
     key='gestionale_as_signature_key',
     cookie_expiry_days=30,
-    auto_hash=True
+    auto_hash=False # Disattivato per accettare le password in chiaro salvate nel foglio
 )
 
 authenticator.login(location="main")
@@ -176,12 +176,11 @@ elif authentication_status == True:
                     mask_atleti = df_filtrato.astype(str).apply(lambda x: x.str.contains(ricerca_atleta, case=False)).any(axis=1)
                     df_filtrato = df_filtrato[mask_atleti]
 
-                st.info("💡 **Istruzioni:** Modifica i dati o elimina le righelezionandole e premendo *Canc*.")
+                st.info("💡 **Istruzioni:** Modifica i dati o elimina le righe selezionandole e premendo *Canc*.")
                 
                 edited_df_filtrato = st.data_editor(df_filtrato, num_rows="dynamic", use_container_width=True, key="editor_atleti")
                 
                 if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_atleti"):
-                    # Ricostruiamo il dataframe completo unendo le parti non visualizzate con quelle modificate
                     if st.session_state.filtro_atleti_attivo != "Tutti" and "Categoria" in df_atleti_completo.columns:
                         df_resto = df_atleti_completo[df_atleti_completo["Categoria"] != st.session_state.filtro_atleti_attivo]
                         df_finale = pd.concat([df_resto, edited_df_filtrato], ignore_index=True)
