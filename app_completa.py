@@ -437,21 +437,30 @@ elif authentication_status == True:
                 
         with tab_u2:
             with st.form("form_nuovo_utente", clear_on_submit=True):
+                st.write("### ➕ Aggiungi un nuovo utente al sistema")
                 col_u1, col_u2 = st.columns(2)
-                nuovo_user = col_u1.text_input("Username (es. mario.rossi) *").strip()
-                nuova_pass = col_u2.text_input("Password *", type="password")
-                nome_completo = col_u1.text_input("Nome e Cognome *")
-                email_utente = col_u2.text_input("Email (opzionale)")
+                
+                with col_u1:
+                    nuovo_user = st.text_input("Username (es. mario.rossi) *").strip()
+                    nome_completo = st.text_input("Nome e Cognome *")
+                
+                with col_u2:
+                    nuova_pass = st.text_input("Password *", type="password")
+                    email_utente = st.text_input("Email (opzionale)")
+                
+                # Selettore del ruolo posizionato chiaramente fuori dalle colonne divise
+                ruolo_utente = st.selectbox("Ruolo Utente *", ["user", "admin"], help="Gli admin possono gestire gli utenti, i user no.")
+                
+                st.divider()
                 
                 if st.form_submit_button("Crea Nuovo Utente"):
                     if nuovo_user and nuova_pass and nome_completo:
                         if not df_utenti_sheet.empty and "Username" in df_utenti_sheet.columns and nuovo_user in df_utenti_sheet["Username"].values:
                             st.error("Errore: Questo username esiste già.")
                         else:
-                            # Con auto_hash=True, salviamo la password in chiaro: la libreria la gestirà in automatico
-                            res = append_row_to_sheet("utenti", [nuovo_user, nuova_pass, nome_completo, email_utente])
+                            res = append_row_to_sheet("utenti", [nuovo_user, nuova_pass, nome_completo, email_utente, ruolo_utente])
                             if res.get("status") == "success":
-                                st.success(f"Utente '{nuovo_user}' creato con successo! Adesso può effettuare il login.")
+                                st.success(f"Utente '{nuovo_user}' con ruolo '{ruolo_utente}' creato con successo!")
                                 st.rerun()
                             else:
                                 st.error(f"Errore: {res.get('message')}")
