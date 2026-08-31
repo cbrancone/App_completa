@@ -31,7 +31,9 @@ def append_row_to_sheet(sheet_name, row_data):
 
 def update_entire_sheet(sheet_name, df):
     try:
-        data_to_send = [df.columns.tolist()] + df.values.tolist()
+        # Assicuriamoci di convertire tutto in stringhe/tipi base per evitare errori JSON
+        df_clean = df.fillna("")
+        data_to_send = [df_clean.columns.tolist()] + df_clean.values.tolist()
         payload = {"sheet": sheet_name, "action": "update_table", "rows": data_to_send}
         response = requests.post(WEB_APP_URL, json=payload)
         return response.json()
@@ -45,37 +47,51 @@ st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="�
 
 df_utenti = get_as_df("utenti")
 
+# Inizializziamo l'admin se il foglio è vuoto (con tutte e 6 le colonne richieste)
 if df_utenti.empty or "Username" not in df_utenti.columns:
-    default_user_row = ["admin", "admin123", "Amministratore", "Admin"]
+    default_user_row = ["admin", "admin123", "Amministratore", "admin@email.com", "admin", "Amministratore"]
     append_row_to_sheet("utenti", default_user_row)
     df_utenti = get_as_df("utenti")
 
 credentials = {"usernames": {}}
+user_roles = {}
+
+# Mappatura accurata degli utenti prelevati da Google Sheets
 if not df_utenti.empty and "Username" in df_utenti.columns:
     for _, row in df_utenti.iterrows():
         username = str(row.get("Username", "")).strip()
         password_db = str(row.get("Password", "")).strip()
+        ruolo = str(row.get("Ruolo", "user")).strip().lower()
+        # Recupera il nome da una delle due colonne disponibili
+        nome_db = str(row.get("Nome Completo", row.get("Nome e Cognome", username))).strip()
+        email_db = str(row.get("Email", "")).strip()
             
         if username and username != "nan" and username != "":
             credentials["usernames"][username] = {
-                "name": str(row.get("Nome Completo", username)),
+                "name": nome_db,
                 "password": password_db,
-                "email": str(row.get("Email", ""))
+                "email": email_db
             }
+            if username == "admin":
+                user_roles["admin"] = "admin"
+            else:
+                user_roles[username] = ruolo if ruolo in ["admin", "user"] else "user"
 
+# Fallback di sicurezza se l'admin non viene letto correttamente
 if "admin" not in credentials["usernames"]:
     credentials["usernames"]["admin"] = {
         "name": "Amministratore",
         "password": "admin123",
         "email": ""
     }
+    user_roles["admin"] = "admin"
 
 authenticator = stauth.Authenticate(
     credentials,
     cookie_name='gestionale_as_cookie_unique_id',
     key='gestionale_as_signature_key',
     cookie_expiry_days=30,
-    auto_hash=True # Gestisce automaticamente le password lette dal foglio
+    auto_hash=False # Disattivato auto_hash per consentire la lettura in chiaro delle password dal foglio
 )
 
 authenticator.login(location="main")
@@ -83,6 +99,8 @@ authenticator.login(location="main")
 authentication_status = st.session_state.get("authentication_status")
 name = st.session_state.get("name")
 username = st.session_state.get("username")
+
+current_user_role = user_roles.get(username, "user")
 
 LISTA_CATEGORIE = [
     "Juniores", 
@@ -101,7 +119,7 @@ elif authentication_status == None:
 elif authentication_status == True:
     
     authenticator.logout("Logout", "sidebar", key="logout_btn")
-    st.sidebar.markdown(f"Benvenuto/a, **{name}** (`{username}`)")
+    st.sidebar.markdown(f"Benvenuto/a, **{name}** (`{username}` - *{current_user_role.upper()}*)")
     st.sidebar.divider()
 
     st.sidebar.title("Navigazione")
@@ -113,7 +131,7 @@ elif authentication_status == True:
         "💸 Uscite (Spese Generali)"
     ]
     
-    if username == "admin":
+    if current_user_role == "admin":
         lista_menu.append("👥 Gestione Utenti")
 
     menu = st.sidebar.radio("Scegli Sezione:", lista_menu)
@@ -415,7 +433,7 @@ elif authentication_status == True:
     # ------------------------------------------
     # 6. GESTIONE UTENTI (SOLO ADMIN)
     # ------------------------------------------
-    elif menu == "👥 Gestione Utenti" and username == "admin":
+    elif menu == "👥 Gestione Utenti" and current_user_role == "admin":
         st.header("👥 Gestione Utenti del Gestionale")
         tab_u1, tab_u2 = st.tabs(["📋 Elenco e Modifica Utenti", "➕ Crea Nuovo Utente"])
         
@@ -428,7 +446,7 @@ elif authentication_status == True:
                 if st.button("💾 Salva modifiche su Google (Utenti)", key="btn_salva_utenti"):
                     res = update_entire_sheet("utenti", edited_df_utenti)
                     if res.get("status") == "success":
-                        st.success("Tabella utenti aggiornata con successo! Ricarica la pagina per applicare le modifiche di accesso.")
+                        st.success("Tabella utenti aggiornata con successo! Ricarica la pagina per applicare le modifiche.")
                         st.rerun()
                     else:
                         st.error(f"Errore: {res.get('message')}")
@@ -448,7 +466,6 @@ elif authentication_status == True:
                     nuova_pass = st.text_input("Password *", type="password")
                     email_utente = st.text_input("Email (opzionale)")
                 
-                # Selettore del ruolo posizionato chiaramente fuori dalle colonne divise
                 ruolo_utente = st.selectbox("Ruolo Utente *", ["user", "admin"], help="Gli admin possono gestire gli utenti, i user no.")
                 
                 st.divider()
@@ -458,9 +475,13 @@ elif authentication_status == True:
                         if not df_utenti_sheet.empty and "Username" in df_utenti_sheet.columns and nuovo_user in df_utenti_sheet["Username"].values:
                             st.error("Errore: Questo username esiste già.")
                         else:
-                            res = append_row_to_sheet("utenti", [nuovo_user, nuova_pass, nome_completo, email_utente, ruolo_utente])
+                            # ⚠️ Qui passiamo ESATTAMENTE le 6 colonne nel tuo ordine:
+                            # Username, Password, Nome Completo, Email, Ruolo, Nome e Cognome
+                            nuova_riga = [nuovo_user, nuova_pass, nome_completo, email_utente, ruolo_utente, nome_completo]
+                            
+                            res = append_row_to_sheet("utenti", nuova_riga)
                             if res.get("status") == "success":
-                                st.success(f"Utente '{nuovo_user}' con ruolo '{ruolo_utente}' creato con successo!")
+                                st.success(f"Utente '{nuovo_user}' creato con successo!")
                                 st.rerun()
                             else:
                                 st.error(f"Errore: {res.get('message')}")
