@@ -71,15 +71,16 @@ authenticator = stauth.Authenticate(
 )
 
 # Mostra il form di login nella schermata principale
-name, authentication_status, username = authenticator.login(
-    location="main", 
-    fields={
-        'Form name': 'Login', 
-        'Username': 'Username', 
-        'Password': 'Password', 
-        'Login': 'Login'
-    }
-)
+name, authentication_status, username = authenticator.login(location="main")
+
+if authentication_status == False:
+    st.error("⚠️ Username o password errati.")
+elif authentication_status == None:
+    st.warning("🔐 Inserisci le tue credenziali per accedere al gestionale.")
+    st.stop()  # Interrompe l'esecuzione finché non si effettua il login
+elif authentication_status == True:
+    # Da qui in poi inizia il codice per gli utenti autenticati
+    
     st.error("⚠️ Username o password errati.")
 elif authentication_status == None:
     st.warning("🔐 Inserisci le tue credenziali per accedere al gestionale.")
