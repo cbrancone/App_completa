@@ -144,21 +144,30 @@ elif authentication_status == True:
         with tab1:
             df_atleti = get_as_df("atleti")
             if not df_atleti.empty:
-                # --- FILTRO PER CATEGORIA ---
                 if "Categoria" in df_atleti.columns:
-                    scelta_filtro = st.selectbox("🔍 Filtra per Categoria:", ["Tutte le categorie"] + LISTA_CATEGORIE)
-                    if scelta_filtro != "Tutte le categorie":
-                        df_atleti_filtrato = df_atleti[df_atleti["Categoria"] == scelta_filtro]
-                    else:
-                        df_atleti_filtrato = df_atleti
-                else:
-                    df_atleti_filtrato = df_atleti
+                    st.write("🎯 **Filtra per Categoria:**")
+                    cols_cat = st.columns(len(LISTA_CATEGORIE) + 1)
+                    
+                    # Inizializza lo stato del filtro se non esiste
+                    if "filtro_atleti_attivo" not in st.session_state:
+                        st.session_state.filtro_atleti_attivo = "Tutti"
+                    
+                    if cols_cat[0].button("⚪ Tutti", key="btn_atleti_tutti"):
+                        st.session_state.filtro_atleti_attivo = "Tutti"
+                        st.rerun()
+                        
+                    for i, cat in enumerate(LISTA_CATEGORIE):
+                        if cols_cat[i+1].button(f"🟢 {cat}", key=f"btn_atleti_{cat}"):
+                            st.session_state.filtro_atleti_attivo = cat
+                            st.rerun()
+                            
+                    if st.session_state.filtro_atleti_attivo != "Tutti":
+                        st.info(F"Stai visualizzando solo la categoria: **{st.session_state.filtro_atleti_attivo}**")
+                        df_atleti = df_atleti[df_atleti["Categoria"] == st.session_state.filtro_atleti_attivo]
 
-                st.info("💡 Modifica i dati direttamente nella tabella e clicca su 'Salva modifiche su Google'.")
-                edited_df_atleti = st.data_editor(df_atleti_filtrato, use_container_width=True, key="editor_atleti")
+                edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
                 
                 if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_atleti"):
-                    # Se è attivo un filtro, per sicurezza aggiorniamo l'intero dataset unendo le modifiche o salvando il dataframe filtrato se combacia
                     res = update_entire_sheet("atleti", edited_df_atleti)
                     if res.get("status") == "success":
                         st.success("Tabella atleti aggiornata con successo su Google Sheets!")
@@ -278,17 +287,33 @@ elif authentication_status == True:
         
         with tab1:
             if not df_pagamenti.empty:
-                # --- FILTRO PER CATEGORIA NEGLI INCASSI ---
-                if "Categoria" in df_pagamenti.columns:
-                    scelta_filtro_pag = st.selectbox("🔍 Filtra Incassi per Categoria:", ["Tutte le categorie"] + LISTA_CATEGORIE, key="filtro_pag")
-                    if scelta_filtro_pag != "Tutte le categorie":
-                        df_pagamenti_filtrato = df_pagamenti[df_pagamenti["Categoria"] == scelta_filtro_pag]
-                    else:
-                        df_pagamenti_filtrato = df_pagamenti
-                else:
-                    df_pagamenti_filtrato = df_pagamenti
+                st.write("🎯 **Filtra Incassi per Categoria:**")
+                cols_cat_pag = st.columns(len(LISTA_CATEGORIE) + 1)
+                
+                if "filtro_pag_attivo" not in st.session_state:
+                    st.session_state.filtro_pag_attivo = "Tutti"
+                
+                if cols_cat_pag[0].button("⚪ Tutti", key="btn_pag_tutti"):
+                    st.session_state.filtro_pag_attivo = "Tutti"
+                    st.rerun()
+                    
+                for i, cat in enumerate(LISTA_CATEGORIE):
+                    if cols_cat_pag[i+1].button(f"🟢 {cat}", key=f"btn_pag_{cat}"):
+                        st.session_state.filtro_pag_attivo = cat
+                        st.rerun()
+                        
+                if st.session_state.filtro_pag_attivo != "Tutti":
+                    st.info(f"Stai visualizzando solo gli incassi della categoria: **{st.session_state.filtro_pag_attivo}**")
+                    if "Categoria" in df_pagamenti.columns:
+                        df_pagamenti = df_pagamenti[df_pagamenti["Categoria"] == st.session_state.filtro_pag_attivo]
 
-                edited_df_pagamenti = st.data_editor(df_pagamenti_filtrato, use_container_width=True, key="editor_pagamenti")
+                # Barra di ricerca testuale aggiuntiva
+                ricerca_testo = st.text_input("🔎 Cerca per Atleta o Causale:", "", key="ricerca_incassi")
+                if ricerca_testo:
+                    mask = df_pagamenti.astype(str).apply(lambda x: x.str.contains(ricerca_testo, case=False)).any(axis=1)
+                    df_pagamenti = df_pagamenti[mask]
+
+                edited_df_pagamenti = st.data_editor(df_pagamenti, use_container_width=True, key="editor_pagamenti")
                 if st.button("💾 Salva modifiche su Google (Incassi)", key="btn_incassi"):
                     res = update_entire_sheet("pagamenti", edited_df_pagamenti)
                     if res.get("status") == "success":
