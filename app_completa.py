@@ -55,10 +55,16 @@ credentials = {"usernames": {}}
 if not df_utenti.empty and "Username" in df_utenti.columns:
     for _, row in df_utenti.iterrows():
         username = str(row.get("Username"))
+        password_db = str(row.get("Password", ""))
+        
+        # Se la password nel DB non è hashata, la criptiamo al volo per il login
+        if password_db and not password_db.startswith("$2b$"):
+            password_db = stauth.Hasher([password_db]).generate()[0]
+            
         if username and username != "nan":
             credentials["usernames"][username] = {
                 "name": str(row.get("Nome Completo", username)),
-                "password": str(row.get("Password", "")),
+                "password": password_db,
                 "email": ""
             }
 
