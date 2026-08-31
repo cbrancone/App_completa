@@ -46,7 +46,6 @@ df_utenti = get_as_df("utenti")
 
 # Se il foglio utenti è vuoto, creiamo un utente amministratore di default
 if df_utenti.empty:
-    # Utente predefinito: admin / admin123 (Nota: in produzione le password andrebbero criptate, qui usiamo testo chiaro per semplicità di avvio)
     default_user_row = ["admin", "admin123", "Amministratore", "Admin"]
     append_row_to_sheet("utenti", default_user_row)
     df_utenti = get_as_df("utenti")
@@ -70,8 +69,13 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=30
 )
 
-# Mostra il form di login nella schermata principale
-name, authentication_status, username = authenticator.login(location="main")
+# Mostra il widget di login
+authenticator.login(location="main")
+
+# Recupera lo stato direttamente dalla sessione di Streamlit
+authentication_status = st.session_state.get("authentication_status")
+name = st.session_state.get("name")
+username = st.session_state.get("username")
 
 if authentication_status == False:
     st.error("⚠️ Username o password errati.")
@@ -79,19 +83,10 @@ elif authentication_status == None:
     st.warning("🔐 Inserisci le tue credenziali per accedere al gestionale.")
     st.stop()  # Interrompe l'esecuzione finché non si effettua il login
 elif authentication_status == True:
-    # Da qui in poi inizia il codice per gli utenti autenticati
-    
-    st.error("⚠️ Username o password errati.")
-elif authentication_status == None:
-    st.warning("🔐 Inserisci le tue credenziali per accedere al gestionale.")
-    st.stop()  # Interrompe l'esecuzione finché non si effettua il login
-
-elif authentication_status == True:
     # ==========================================
     # INTERFACCIA STREAMLIT (ACCESSO CONSENTITO)
     # ==========================================
     
-    # Bottone di logout e benvenuto nella barra laterale
     authenticator.logout("Logout", "sidebar", key="logout_btn")
     st.sidebar.markdown(f"Benvenuto/a, **{name}** (`{username}`)")
     st.sidebar.divider()
