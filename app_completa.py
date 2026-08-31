@@ -40,16 +40,19 @@ def update_entire_sheet(sheet_name, df):
         return {"status": "error", "message": str(e)}
 
 # ==========================================
-# GESTIONE UTENTI & AUTENTICAZIONE (SICURA)
+# GESTIONE UTENTI & AUTENTICAZIONE
 # ==========================================
 st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="🏆", layout="wide")
 
-# Credenziali di emergenza sempre garantite per evitare blocchi al login
+# Creiamo le password in chiaro e usiamo Hasher per renderle compatibili al 100% con la libreria
+raw_passwords = ["admin123"]
+passwords_hash = stauth.Hasher(raw_passwords).generate()
+
 credentials = {
     "usernames": {
         "admin": {
             "name": "Amministratore",
-            "password": "admin123",
+            "password": passwords_hash[0],
             "email": "admin@email.com"
         }
     }
@@ -59,6 +62,9 @@ user_roles = {"admin": "admin"}
 df_utenti = get_as_df("utenti")
 
 if not df_utenti.empty and "Username" in df_utenti.columns:
+    lista_pass_da_hashare = []
+    righe_utenti = []
+    
     for _, row in df_utenti.iterrows():
         username = str(row.get("Username", "")).strip()
         password_db = str(row.get("Password", "")).strip()
@@ -66,20 +72,25 @@ if not df_utenti.empty and "Username" in df_utenti.columns:
         nome_db = str(row.get("Nome Completo", row.get("Nome e Cognome", username))).strip()
         email_db = str(row.get("Email", "")).strip()
             
-        if username and username != "nan" and username != "":
+        if username and username != "nan" and username != "" and username != "admin":
+            righe_utenti.append((username, password_db, nome_db, email_db, ruolo))
+            lista_pass_da_hashare.append(password_db)
+            
+    if lista_pass_da_hashare:
+        hashed_db_passwords = stauth.Hasher(lista_pass_da_hashare).generate()
+        for idx, (username, _, nome_db, email_db, ruolo) in enumerate(righe_utenti):
             credentials["usernames"][username] = {
                 "name": nome_db,
-                "password": password_db,
+                "password": hashed_db_passwords[idx],
                 "email": email_db
             }
             user_roles[username] = "admin" if ruolo == "admin" else "user"
 
 authenticator = stauth.Authenticate(
     credentials,
-    cookie_name='gestionale_as_cookie_unique_id',
-    key='gestionale_as_signature_key',
-    cookie_expiry_days=30,
-    auto_hash=False
+    cookie_name='gestionale_as_cookie_unique_id_v2',
+    key='gestionale_as_signature_key_v2',
+    cookie_expiry_days=30
 )
 
 try:
@@ -105,7 +116,7 @@ LISTA_CATEGORIE = [
 if authentication_status == False:
     st.error("⚠️ Username o password errati.")
 elif authentication_status == None:
-    st.warning("🔐 Inserisci le tue credenziali per accedere al gestionale.")
+    st.warning("🔐 Inserisci le tue credenziali per accedere al gestionale. (Default: admin / admin123)")
     st.stop()
 elif authentication_status == True:
     
