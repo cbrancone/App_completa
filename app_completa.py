@@ -40,19 +40,23 @@ def update_entire_sheet(sheet_name, df):
         return {"status": "error", "message": str(e)}
 
 # ==========================================
-# GESTIONE UTENTI & AUTENTICAZIONE
+# GESTIONE UTENTI & AUTENTICAZIONE (SICURA)
 # ==========================================
 st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="🏆", layout="wide")
 
+# Credenziali di emergenza sempre garantite per evitare blocchi al login
+credentials = {
+    "usernames": {
+        "admin": {
+            "name": "Amministratore",
+            "password": "admin123",
+            "email": "admin@email.com"
+        }
+    }
+}
+user_roles = {"admin": "admin"}
+
 df_utenti = get_as_df("utenti")
-
-if df_utenti.empty or "Username" not in df_utenti.columns:
-    default_user_row = ["admin", "admin123", "Amministratore", "admin@email.com", "admin", "Amministratore"]
-    append_row_to_sheet("utenti", default_user_row)
-    df_utenti = get_as_df("utenti")
-
-credentials = {"usernames": {}}
-user_roles = {}
 
 if not df_utenti.empty and "Username" in df_utenti.columns:
     for _, row in df_utenti.iterrows():
@@ -68,18 +72,7 @@ if not df_utenti.empty and "Username" in df_utenti.columns:
                 "password": password_db,
                 "email": email_db
             }
-            if username == "admin":
-                user_roles["admin"] = "admin"
-            else:
-                user_roles[username] = ruolo if ruolo in ["admin", "user"] else "user"
-
-if "admin" not in credentials["usernames"]:
-    credentials["usernames"]["admin"] = {
-        "name": "Amministratore",
-        "password": "admin123",
-        "email": ""
-    }
-    user_roles["admin"] = "admin"
+            user_roles[username] = "admin" if ruolo == "admin" else "user"
 
 authenticator = stauth.Authenticate(
     credentials,
