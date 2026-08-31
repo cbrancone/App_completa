@@ -75,7 +75,7 @@ authenticator = stauth.Authenticate(
     cookie_name='gestionale_as_cookie_unique_id',
     key='gestionale_as_signature_key',
     cookie_expiry_days=30,
-    auto_hash=False # Disattivato per accettare le password in chiaro salvate nel foglio
+    auto_hash=True # Riattivato correttamente per criptare e verificare le password
 )
 
 authenticator.login(location="main")
@@ -113,7 +113,6 @@ elif authentication_status == True:
         "💸 Uscite (Spese Generali)"
     ]
     
-    # Mostra la gestione utenti solo se l'utente loggato è admin
     if username == "admin":
         lista_menu.append("👥 Gestione Utenti")
 
@@ -167,7 +166,7 @@ elif authentication_status == True:
                 
                 df_filtrato = df_atleti_completo.copy()
                 if st.session_state.filtro_atleti_attivo != "Tutti":
-                    st.info(f"Stai visualizzando solo gli atleti della categoria: **{st.session_state.filtro_atleti_attivo}** (Le modifiche e cancellazioni terranno conto di tutto il database).")
+                    st.info(f"Stai visualizzando solo gli atleti della categoria: **{st.session_state.filtro_atleti_attivo}**")
                     if "Categoria" in df_filtrato.columns:
                         df_filtrato = df_filtrato[df_filtrato["Categoria"] == st.session_state.filtro_atleti_attivo]
 
@@ -176,8 +175,6 @@ elif authentication_status == True:
                     mask_atleti = df_filtrato.astype(str).apply(lambda x: x.str.contains(ricerca_atleta, case=False)).any(axis=1)
                     df_filtrato = df_filtrato[mask_atleti]
 
-                st.info("💡 **Istruzioni:** Modifica i dati o elimina le righe selezionandole e premendo *Canc*.")
-                
                 edited_df_filtrato = st.data_editor(df_filtrato, num_rows="dynamic", use_container_width=True, key="editor_atleti")
                 
                 if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_atleti"):
