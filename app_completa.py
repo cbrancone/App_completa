@@ -14,7 +14,9 @@ def get_as_df(sheet_name):
         url = f"{WEB_APP_URL}?action=leggi&sheet={sheet_name}"
         response = requests.get(url)
         if response.status_code == 200:
-            return pd.DataFrame(response.json())
+            data = response.json()
+            if data:
+                return pd.DataFrame(data)
         return pd.DataFrame()
     except Exception:
         return pd.DataFrame()
@@ -44,39 +46,44 @@ st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="�
 # Recupera gli utenti da Google Sheets
 df_utenti = get_as_df("utenti")
 
-# Se il foglio utenti è vuoto, creiamo l'utente admin con password in chiaro
-if df_utenti.empty:
+# Se il foglio utenti è vuoto o non ha colonne valide, creiamo l'utente admin di default
+if df_utenti.empty or "Username" not in df_utenti.columns:
     default_user_row = ["admin", "admin123", "Amministratore", "Admin"]
     append_row_to_sheet("utenti", default_user_row)
     df_utenti = get_as_df("utenti")
 
-# Prepara la struttura dati per streamlit-authenticator
+# Costruiamo il dizionario delle credenziali nel formato richiesto da streamlit-authenticator
 credentials = {"usernames": {}}
 if not df_utenti.empty and "Username" in df_utenti.columns:
     for _, row in df_utenti.iterrows():
-        username = str(row.get("Username"))
-        password_db = str(row.get("Password", ""))
+        username = str(row.get("Username", "")).strip()
+        password_db = str(row.get("Password", "")).strip()
             
-        if username and username != "nan":
-            # Se la password nel foglio non è ancora un hash (es. "admin123"), la hashiamo noi una tantum in memoria
-            if password_db and not password_db.startswith("$2b$"):
-                password_db = stauth.Hasher([password_db]).generate()[0]
-
+        if username and username != "nan" and username != "":
             credentials["usernames"][username] = {
                 "name": str(row.get("Nome Completo", username)),
                 "password": password_db,
-                "email": ""
+                "email": str(row.get("Email", ""))
             }
 
-# Inizializzazione dell'authenticator
+# Assicuriamoci che l'utente admin esista sempre in memoria nel dizionario anche se il foglio risponde male
+if "admin" not in credentials["usernames"]:
+    credentials["usernames"]["admin"] = {
+        "name": "Amministratore",
+        "password": "admin123",
+        "email": ""
+    }
+
+# Inizializzazione dell'authenticator con auto_hash=True per gestire la password in chiaro
 authenticator = stauth.Authenticate(
     credentials,
     cookie_name='gestionale_as_cookie_unique_id',
     key='gestionale_as_signature_key',
-    cookie_expiry_days=30
+    cookie_expiry_days=30,
+    auto_hash=True
 )
 
-# Mostra il widget di login
+# Mostra il widget di login nel corpo principale
 authenticator.login(location="main")
 
 # Recupera lo stato direttamente dalla sessione di Streamlit
@@ -329,6 +336,6 @@ elif authentication_status == True:
                             st.success("Spesa registrata correttamente!")
                             st.rerun()
                         else:
-                            st.error(f"Errore: {res.get('message')}")
+                            st.error(f"Res.get('message')")
                     else:
                         st.warning("Inserisci una descrizione e un importo valido.")
