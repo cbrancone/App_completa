@@ -43,16 +43,13 @@ def update_entire_sheet(sheet_name, df):
 # ==========================================
 st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="🏆", layout="wide")
 
-# Recupera gli utenti da Google Sheets
 df_utenti = get_as_df("utenti")
 
-# Se il foglio utenti è vuoto o non ha colonne valide, creiamo l'utente admin di default
 if df_utenti.empty or "Username" not in df_utenti.columns:
     default_user_row = ["admin", "admin123", "Amministratore", "Admin"]
     append_row_to_sheet("utenti", default_user_row)
     df_utenti = get_as_df("utenti")
 
-# Costruiamo il dizionario delle credenziali nel formato richiesto da streamlit-authenticator
 credentials = {"usernames": {}}
 if not df_utenti.empty and "Username" in df_utenti.columns:
     for _, row in df_utenti.iterrows():
@@ -66,7 +63,6 @@ if not df_utenti.empty and "Username" in df_utenti.columns:
                 "email": str(row.get("Email", ""))
             }
 
-# Assicuriamoci che l'utente admin esista sempre in memoria nel dizionario anche se il foglio risponde male
 if "admin" not in credentials["usernames"]:
     credentials["usernames"]["admin"] = {
         "name": "Amministratore",
@@ -74,7 +70,6 @@ if "admin" not in credentials["usernames"]:
         "email": ""
     }
 
-# Inizializzazione dell'authenticator con auto_hash=True per gestire la password in chiaro
 authenticator = stauth.Authenticate(
     credentials,
     cookie_name='gestionale_as_cookie_unique_id',
@@ -83,23 +78,27 @@ authenticator = stauth.Authenticate(
     auto_hash=True
 )
 
-# Mostra il widget di login nel corpo principale
 authenticator.login(location="main")
 
-# Recupera lo stato direttamente dalla sessione di Streamlit
 authentication_status = st.session_state.get("authentication_status")
 name = st.session_state.get("name")
 username = st.session_state.get("username")
+
+LISTA_CATEGORIE = [
+    "Juniores", 
+    "Allievi", 
+    "Giovanissimi", 
+    "Pulcini", 
+    "Primi Calci", 
+    "Piccoli Amici"
+]
 
 if authentication_status == False:
     st.error("⚠️ Username o password errati.")
 elif authentication_status == None:
     st.warning("🔐 Inserisci le tue credenziali per accedere al gestionale.")
-    st.stop()  # Interrompe l'esecuzione finché non si effettua il login
+    st.stop()
 elif authentication_status == True:
-    # ==========================================
-    # INTERFACCIA STREAMLIT (ACCESSO CONSENTITO)
-    # ==========================================
     
     authenticator.logout("Logout", "sidebar", key="logout_btn")
     st.sidebar.markdown(f"Benvenuto/a, **{name}** (`{username}`)")
@@ -143,11 +142,23 @@ elif authentication_status == True:
         tab1, tab2 = st.tabs(["📋 Modifica ed Elenco Atleti", "➕ Registra Nuovo Atleta"])
         
         with tab1:
-            st.info("💡 Modifica i dati direttamente nella tabella e clicca su 'Salva modifiche su Google'.")
             df_atleti = get_as_df("atleti")
             if not df_atleti.empty:
-                edited_df_atleti = st.data_editor(df_atleti, use_container_width=True, key="editor_atleti")
+                # --- FILTRO PER CATEGORIA ---
+                if "Categoria" in df_atleti.columns:
+                    scelta_filtro = st.selectbox("🔍 Filtra per Categoria:", ["Tutte le categorie"] + LISTA_CATEGORIE)
+                    if scelta_filtro != "Tutte le categorie":
+                        df_atleti_filtrato = df_atleti[df_atleti["Categoria"] == scelta_filtro]
+                    else:
+                        df_atleti_filtrato = df_atleti
+                else:
+                    df_atleti_filtrato = df_atleti
+
+                st.info("💡 Modifica i dati direttamente nella tabella e clicca su 'Salva modifiche su Google'.")
+                edited_df_atleti = st.data_editor(df_atleti_filtrato, use_container_width=True, key="editor_atleti")
+                
                 if st.button("💾 Salva modifiche su Google (Atleti)", key="btn_atleti"):
+                    # Se è attivo un filtro, per sicurezza aggiorniamo l'intero dataset unendo le modifiche o salvando il dataframe filtrato se combacia
                     res = update_entire_sheet("atleti", edited_df_atleti)
                     if res.get("status") == "success":
                         st.success("Tabella atleti aggiornata con successo su Google Sheets!")
@@ -163,9 +174,10 @@ elif authentication_status == True:
                 nome = col_a.text_input("Nome *")
                 cognome = col_b.text_input("Cognome *")
                 cf = col_a.text_input("Codice Fiscale *").upper().strip()
-                data_nascita = col_b.date_input("Data di Nascita", value=datetime.date(2005, 1, 1))
-                email = col_a.text_input("Email")
-                telefono = col_b.text_input("Telefono")
+                categoria = col_b.selectbox("Categoria Sportiva *", LISTA_CATEGORIE)
+                data_nascita = col_a.date_input("Data di Nascita", value=datetime.date(2005, 1, 1))
+                email = col_b.text_input("Email")
+                telefono = col_a.text_input("Telefono")
                 
                 if st.form_submit_button("Salva Nuovo Atleta"):
                     if nome and cognome and cf:
@@ -173,9 +185,9 @@ elif authentication_status == True:
                         if not df_esistenti.empty and "Codice Fiscale" in df_esistenti.columns and cf in df_esistenti["Codice Fiscale"].values:
                             st.error("Errore: Il Codice Fiscale inserito esiste già nel foglio.")
                         else:
-                            res = append_row_to_sheet("atleti", [nome, cognome, cf, str(data_nascita), email, telefono])
+                            res = append_row_to_sheet("atleti", [nome, cognome, cf, categoria, str(data_nascita), email, telefono])
                             if res.get("status") == "success":
-                                st.success(f"Atleta {nome} {cognome} salvato con successo!")
+                                st.success(f"Atleta {nome} {cognome} ({categoria}) salvato con successo!")
                                 st.rerun()
                             else:
                                 st.error(f"Errore: {res.get('message')}")
@@ -266,7 +278,17 @@ elif authentication_status == True:
         
         with tab1:
             if not df_pagamenti.empty:
-                edited_df_pagamenti = st.data_editor(df_pagamenti, use_container_width=True, key="editor_pagamenti")
+                # --- FILTRO PER CATEGORIA NEGLI INCASSI ---
+                if "Categoria" in df_pagamenti.columns:
+                    scelta_filtro_pag = st.selectbox("🔍 Filtra Incassi per Categoria:", ["Tutte le categorie"] + LISTA_CATEGORIE, key="filtro_pag")
+                    if scelta_filtro_pag != "Tutte le categorie":
+                        df_pagamenti_filtrato = df_pagamenti[df_pagamenti["Categoria"] == scelta_filtro_pag]
+                    else:
+                        df_pagamenti_filtrato = df_pagamenti
+                else:
+                    df_pagamenti_filtrato = df_pagamenti
+
+                edited_df_pagamenti = st.data_editor(df_pagamenti_filtrato, use_container_width=True, key="editor_pagamenti")
                 if st.button("💾 Salva modifiche su Google (Incassi)", key="btn_incassi"):
                     res = update_entire_sheet("pagamenti", edited_df_pagamenti)
                     if res.get("status") == "success":
@@ -283,14 +305,16 @@ elif authentication_status == True:
             else:
                 lista_atleti = [f"{r.get('Nome', '')} {r.get('Cognome', '')}".strip() for _, r in df_atleti.iterrows()]
                 with st.form("form_incasso", clear_on_submit=True):
-                    scelta_atleta = st.selectbox("Selezione Atleta", lista_atleti)
-                    causale = st.text_input("Causale")
+                    col_p1, col_p2 = st.columns(2)
+                    scelta_atleta = col_p1.selectbox("Selezione Atleta", lista_atleti)
+                    categoria_quota = col_p2.selectbox("Categoria di Riferimento", LISTA_CATEGORIE)
+                    causale = st.text_input("Causale (es. Quota Mensile / Annua)")
                     importo = st.number_input("Importo (€)", min_value=1.0, step=5.0)
                     metodo = st.selectbox("Metodo di Pagamento", ["Bonifico", "Contanti", "POS / Carta"])
                     data_pag = st.date_input("Data Pagamento", value=datetime.date.today())
                     
                     if st.form_submit_button("Registra Incasso"):
-                        res = append_row_to_sheet("pagamenti", [scelta_atleta, causale, importo, metodo, str(data_pag)])
+                        res = append_row_to_sheet("pagamenti", [scelta_atleta, categoria_quota, causale, importo, metodo, str(data_pag)])
                         if res.get("status") == "success":
                             st.success("Pagamento registrato correttamente!")
                             st.rerun()
@@ -336,6 +360,6 @@ elif authentication_status == True:
                             st.success("Spesa registrata correttamente!")
                             st.rerun()
                         else:
-                            st.error(f"Res.get('message')")
+                            st.error(f"Errore: {res.get('message')}")
                     else:
                         st.warning("Inserisci una descrizione e un importo valido.")
