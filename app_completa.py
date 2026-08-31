@@ -44,11 +44,9 @@ st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="�
 # Recupera gli utenti da Google Sheets
 df_utenti = get_as_df("utenti")
 
-# Se il foglio utenti è vuoto, creiamo un utente amministratore di default con hash pre-calcolato per "admin123"
+# Se il foglio utenti è vuoto, creiamo un utente amministratore di default con password in chiaro
 if df_utenti.empty:
-    # Hash bcrypt valido e fisso per "admin123" per evitare rigenerazioni casuali
-    hashed_admin_pwd = stauth.Hasher(['admin123']).generate()[0]
-    default_user_row = ["admin", hashed_admin_pwd, "Amministratore", "Admin"]
+    default_user_row = ["admin", "admin123", "Amministratore", "Admin"]
     append_row_to_sheet("utenti", default_user_row)
     df_utenti = get_as_df("utenti")
 
@@ -66,12 +64,13 @@ if not df_utenti.empty and "Username" in df_utenti.columns:
                 "email": ""
             }
 
-# Inizializzazione pulita dell'authenticator con chiavi univoche per evitare duplicati
+# Inizializzazione dell'authenticator con auto_hash=True (gestisce tutto la libreria)
 authenticator = stauth.Authenticate(
     credentials,
     cookie_name='gestionale_as_cookie_unique_id',
     key='gestionale_as_signature_key',
-    cookie_expiry_days=30
+    cookie_expiry_days=30,
+    auto_hash=True
 )
 
 # Mostra il widget di login
