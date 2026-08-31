@@ -46,9 +46,7 @@ st.set_page_config(page_title="Gestionale Associazione Sportiva", page_icon="�
 df_utenti = get_as_df("utenti")
 
 if df_utenti.empty or "Username" not in df_utenti.columns:
-    # Se il foglio è vuoto, creiamo l'admin con password già hashata correttamente
-    default_pass_hash = stauth.Hasher(["admin123"]).generate()[0]
-    default_user_row = ["admin", default_pass_hash, "Amministratore", "Admin"]
+    default_user_row = ["admin", "admin123", "Amministratore", "Admin"]
     append_row_to_sheet("utenti", default_user_row)
     df_utenti = get_as_df("utenti")
 
@@ -66,10 +64,9 @@ if not df_utenti.empty and "Username" in df_utenti.columns:
             }
 
 if "admin" not in credentials["usernames"]:
-    default_pass_hash = stauth.Hasher(["admin123"]).generate()[0]
     credentials["usernames"]["admin"] = {
         "name": "Amministratore",
-        "password": default_pass_hash,
+        "password": "admin123",
         "email": ""
     }
 
@@ -78,7 +75,7 @@ authenticator = stauth.Authenticate(
     cookie_name='gestionale_as_cookie_unique_id',
     key='gestionale_as_signature_key',
     cookie_expiry_days=30,
-    auto_hash=False # Disattivato: le password nel DB sono già salvate come hash crittografato
+    auto_hash=True # Gestisce automaticamente le password lette dal foglio
 )
 
 authenticator.login(location="main")
@@ -451,11 +448,10 @@ elif authentication_status == True:
                         if not df_utenti_sheet.empty and "Username" in df_utenti_sheet.columns and nuovo_user in df_utenti_sheet["Username"].values:
                             st.error("Errore: Questo username esiste già.")
                         else:
-                            # Cifratura corretta della password prima del salvataggio nel foglio
-                            hashed_pass = stauth.Hasher([nuova_pass]).generate()[0]
-                            res = append_row_to_sheet("utenti", [nuovo_user, hashed_pass, nome_completo, email_utente])
+                            # Con auto_hash=True, salviamo la password in chiaro: la libreria la gestirà in automatico
+                            res = append_row_to_sheet("utenti", [nuovo_user, nuova_pass, nome_completo, email_utente])
                             if res.get("status") == "success":
-                                st.success(f"Utente '{nuovo_user}' creato con successo!")
+                                st.success(f"Utente '{nuovo_user}' creato con successo! Adesso può effettuare il login.")
                                 st.rerun()
                             else:
                                 st.error(f"Errore: {res.get('message')}")
