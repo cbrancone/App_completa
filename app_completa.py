@@ -192,7 +192,7 @@ elif authentication_status == True:
                 cognome = col_b.text_input("Cognome *")
                 cf = col_a.text_input("Codice Fiscale *").upper().strip()
                 categoria = col_b.selectbox("Categoria Sportiva *", LISTA_CATEGORIE)
-                data_nascita = col_a.date_input("Data di Nascita", value=datetime.date(2005, 1, 1))
+                data_nascita = col_a.date_input("Data di Nascita", value=datetime.date(2015, 1, 1))
                 email = col_b.text_input("Email")
                 telefono = col_a.text_input("Telefono")
                 
