@@ -87,7 +87,8 @@ username = st.session_state.get("username")
 LISTA_CATEGORIE = [
     "Juniores", 
     "Allievi", 
-    "Giovanissimi", 
+    "Giovanissimi",
+    "Esordienti",
     "Pulcini", 
     "Primi Calci", 
     "Piccoli Amici"
